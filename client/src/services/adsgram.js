@@ -1,52 +1,46 @@
-// AdsGram Rewarded Video Ad Controller Wrapper
-export class AdsGramService {
-  constructor(blockId = "int-1234") {
-    this.blockId = blockId;
-    this.adController = null;
-    this.isInitialized = false;
-  }
+/**
+ * AdsGram SDK Integration Helper for Rewarded Video Ads
+ * Block ID: 45460
+ */
 
-  init() {
-    if (typeof window !== "undefined" && window.Adsgram) {
-      try {
-        const idToUse = this.blockId && (this.blockId.startsWith("int-") || !isNaN(Number(this.blockId)))
-          ? this.blockId
-          : "int-1234";
+export const adsgram = {
+  // Initialize and trigger a rewarded video ad
+  async showRewardedVideo(blockId = null) {
+    const activeBlockId = blockId || import.meta.env.VITE_ADSGRAM_BLOCK_ID || "45460";
 
-        this.adController = window.Adsgram.init({
-          blockId: idToUse,
-          debug: false,
-        });
-        this.isInitialized = true;
-        console.log("📺 AdsGram SDK Initialized with block:", idToUse);
-      } catch (err) {
-        console.warn("⚠️ AdsGram init notice:", err.message);
-      }
-    }
-  }
+    return new Promise((resolve, reject) => {
+      // If AdsGram script is loaded in Telegram environment
+      if (window.Adsgram) {
+        try {
+          const AdController = window.Adsgram.init({
+            blockId: activeBlockId.toString(),
+            debug: false,
+          });
 
-  async showRewardedAd() {
-    // If AdsGram SDK is present and running in Telegram
-    if (this.adController) {
-      try {
-        const res = await this.adController.show();
-        if (res && res.done) {
-          return { success: true };
+          AdController.show()
+            .then((result) => {
+              // User successfully completed the ad
+              if (result.done) {
+                resolve({ success: true, rewardClaimed: true });
+              } else {
+                reject(new Error("Ad was skipped or closed before completion."));
+              }
+            })
+            .catch((err) => {
+              console.warn("AdsGram show error:", err);
+              reject(new Error(err?.description || "Ad playback error. Try again later."));
+            });
+        } catch (initErr) {
+          console.error("AdsGram init error:", initErr);
+          reject(new Error("Failed to initialize AdsGram video player."));
         }
-        return { success: false, reason: "Ad closed early or not completed" };
-      } catch (err) {
-        console.warn("Adsgram show fallback:", err?.message || err);
+      } else {
+        // Fallback simulation for local desktop development / browser testing
+        console.log("🎬 Simulated Rewarded Video Ad playing (3s)...");
+        setTimeout(() => {
+          resolve({ success: true, rewardClaimed: true, simulated: true });
+        }, 3000);
       }
-    }
-
-    // Fallback Simulator (for web browser dev testing or fallback)
-    return new Promise((resolve) => {
-      console.log("🎬 Simulating Rewarded Video Ad (2 seconds)...");
-      setTimeout(() => {
-        resolve({ success: true, simulated: true });
-      }, 2000);
     });
   }
-}
-
-export const adsgram = new AdsGramService(import.meta.env.VITE_ADSGRAM_BLOCK_ID || "int-1234");
+};
