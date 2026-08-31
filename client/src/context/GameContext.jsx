@@ -91,7 +91,6 @@ export function GameProvider({ children }) {
         setPlayer(authRes.user);
       }
     } catch (err) {
-      // Fallback for standalone demo / before backend URL is connected
       console.warn("Backend connecting / Standalone mode:", err.message);
       setPlayer((prev) => ({
         ...prev,
@@ -270,7 +269,6 @@ export function GameProvider({ children }) {
         loadMilestones();
       }
     } catch (err) {
-      // Local fallback placement simulation if offline
       for (const p of pixelArray) {
         canvasBufferRef.current[p.y * 1000 + p.x] = p.colorIndex;
       }
@@ -366,4 +364,8 @@ export function GameProvider({ children }) {
       {children}
     </GameContext.Provider>
   );
+}
+
+export function useGame() {
+  return useContext(GameContext);
 }
