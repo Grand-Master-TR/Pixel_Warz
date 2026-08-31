@@ -1,0 +1,12 @@
+node_modules/
+.env
+.env.local
+.DS_Store
+*.log
+client/dist/
+server/database/*.db
+server/database/*.db-journal
+server/database/*.db-wal
+server/database/*.db-shm
+server/database/*.bin
+clean_bom.cjs

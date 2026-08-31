@@ -1,0 +1,172 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --app-height: 100vh;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background-color: #0a0b0e;
+  color: #f1f5f9;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  font-family: 'Space Grotesk', sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Custom retro scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #12141c;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #282c3c;
+  border-radius: 0px;
+  border: 1px solid #000;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #f59e0b;
+}
+
+/* Crisp Pixel Art Rendering */
+canvas.pixel-canvas {
+  image-rendering: -moz-crisp-edges;
+  image-rendering: -webkit-crisp-edges;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+/* Retro Arcade Box Panels */
+.arcade-box {
+  background: #12141c;
+  border: 2px solid #282c3c;
+  box-shadow: 3px 3px 0px #000;
+}
+
+.arcade-box-gold {
+  background: #161511;
+  border: 2px solid #d97706;
+  box-shadow: 3px 3px 0px #000;
+}
+
+.arcade-box-emerald {
+  background: #0f1715;
+  border: 2px solid #059669;
+  box-shadow: 3px 3px 0px #000;
+}
+
+.arcade-box-violet {
+  background: #16121f;
+  border: 2px solid #7c3aed;
+  box-shadow: 3px 3px 0px #000;
+}
+
+.arcade-pill {
+  background: #1a1d28;
+  border: 1px solid #3b4055;
+  box-shadow: 2px 2px 0px #000;
+}
+
+/* 3D Tactile Pixel Buttons */
+.pixel-btn {
+  font-family: 'Silkscreen', monospace;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 2px solid #000;
+  box-shadow: 0 4px 0 #000;
+  transition: transform 0.06s ease, box-shadow 0.06s ease;
+  position: relative;
+}
+
+.pixel-btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #000;
+}
+
+.pixel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: 0 2px 0 #000;
+}
+
+.pixel-btn-gold {
+  background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
+  color: #0a0b0e;
+  border: 2px solid #000;
+  box-shadow: 0 4px 0 #b45309;
+}
+
+.pixel-btn-gold:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #b45309;
+}
+
+.pixel-btn-emerald {
+  background: linear-gradient(180deg, #34d399 0%, #10b981 100%);
+  color: #0a0b0e;
+  border: 2px solid #000;
+  box-shadow: 0 4px 0 #047857;
+}
+
+.pixel-btn-emerald:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #047857;
+}
+
+.pixel-btn-crimson {
+  background: linear-gradient(180deg, #f87171 0%, #ef4444 100%);
+  color: #ffffff;
+  border: 2px solid #000;
+  box-shadow: 0 4px 0 #991b1b;
+}
+
+.pixel-btn-crimson:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #991b1b;
+}
+
+.pixel-btn-violet {
+  background: linear-gradient(180deg, #a78bfa 0%, #8b5cf6 100%);
+  color: #ffffff;
+  border: 2px solid #000;
+  box-shadow: 0 4px 0 #5b21b6;
+}
+
+.pixel-btn-violet:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #5b21b6;
+}
+
+.pixel-btn-dark {
+  background: #1a1d28;
+  color: #e2e8f0;
+  border: 2px solid #000;
+  box-shadow: 0 4px 0 #0f1118;
+}
+
+.pixel-btn-dark:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #0f1118;
+}
+
+.pixel-header {
+  font-family: 'Silkscreen', monospace;
+  text-shadow: 2px 2px 0px #000;
+}
