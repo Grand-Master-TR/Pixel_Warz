@@ -1,5 +1,6 @@
 import express from "express";
 import { storeEngine } from "../services/storeEngine.js";
+import { requireAuth } from "../services/auth.js";
 import { CONFIG } from "../config.js";
 
 export const storeRouter = express.Router();
@@ -12,16 +13,13 @@ storeRouter.get("/packages", (req, res) => {
       pixelsPerAd: CONFIG.ADS.PIXELS_PER_AD,
       cooldownSeconds: CONFIG.ADS.COOLDOWN_SECONDS,
     },
-    dailyStreakBase: CONFIG.ADS.DAILY_STREAK_BASE
+    dailyStreakRewards: CONFIG.ADS.DAILY_STREAK_REWARDS
   });
 });
 
-// Watch Ad reward fulfillment (AdsGram completion)
-storeRouter.post("/watch-ad", (req, res) => {
-  const { userId } = req.body;
-  if (!userId) {
-    return res.status(400).json({ error: "userId is required." });
-  }
+// Watch Ad reward fulfillment (Protected with requireAuth & cooldown verification)
+storeRouter.post("/watch-ad", requireAuth, (req, res) => {
+  const userId = req.userId;
 
   try {
     const result = storeEngine.creditAdWatch(userId);
@@ -31,12 +29,9 @@ storeRouter.post("/watch-ad", (req, res) => {
   }
 });
 
-// Claim Daily Streak reward
-storeRouter.post("/claim-daily", (req, res) => {
-  const { userId } = req.body;
-  if (!userId) {
-    return res.status(400).json({ error: "userId is required." });
-  }
+// Claim Daily Streak reward (Protected with requireAuth)
+storeRouter.post("/claim-daily", requireAuth, (req, res) => {
+  const userId = req.userId;
 
   try {
     const result = storeEngine.claimDailyStreak(userId);
@@ -46,18 +41,17 @@ storeRouter.post("/claim-daily", (req, res) => {
   }
 });
 
-// Create Telegram Stars invoice link (or simulate in development)
-storeRouter.post("/create-invoice", async (req, res) => {
-  const { userId, packageId } = req.body;
+// Create Telegram Stars invoice link
+storeRouter.post("/create-invoice", requireAuth, async (req, res) => {
+  const userId = req.userId;
+  const { packageId } = req.body;
   const pkg = CONFIG.STARS_PACKAGES.find((p) => p.id === packageId);
   if (!pkg) {
-    return res.status(400).json({ error: "Invalid package." });
+    return res.status(400).json({ error: "Invalid package ID." });
   }
 
   try {
-    // If bot token is real, Bot API can call createInvoiceLink
-    // In dev / demo mode, return simulated invoice link
-    const invoiceLink = `https://t.me/\$pixel_wars_bot?start=invoice_${packageId}_${userId}`;
+    const invoiceLink = `https://t.me/pixel_wars_bot?start=invoice_${packageId}_${userId}`;
     res.json({
       invoiceLink,
       package: pkg,
@@ -68,15 +62,20 @@ storeRouter.post("/create-invoice", async (req, res) => {
   }
 });
 
-// Simulate Stars purchase fulfillment (for testing & development)
-storeRouter.post("/simulate-stars-purchase", (req, res) => {
-  const { userId, packageId } = req.body;
-  if (!userId || !packageId) {
-    return res.status(400).json({ error: "userId and packageId required." });
+// Simulate Stars purchase (LOCKED strictly in production)
+storeRouter.post("/simulate-stars-purchase", requireAuth, (req, res) => {
+  if (CONFIG.NODE_ENV === "production" && CONFIG.BOT_TOKEN !== "DEMO_BOT_TOKEN") {
+    return res.status(403).json({ error: "Simulated purchases are strictly disabled in production." });
+  }
+
+  const userId = req.userId;
+  const { packageId } = req.body;
+  if (!packageId) {
+    return res.status(400).json({ error: "packageId required." });
   }
 
   try {
-    const result = storeEngine.creditStarsPurchase(userId, packageId, "simulated_test_charge");
+    const result = storeEngine.creditStarsPurchase(userId, packageId, "dev_sandbox_charge");
     res.json(result);
   } catch (err) {
     res.status(400).json({ error: err.message });

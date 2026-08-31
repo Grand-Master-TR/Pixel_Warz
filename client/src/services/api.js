@@ -1,5 +1,15 @@
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
+let authToken = localStorage.getItem("pw_auth_token") || null;
+
+function getAuthHeaders() {
+  const headers = { "Content-Type": "application/json" };
+  if (authToken) {
+    headers["Authorization"] = `Bearer ${authToken}`;
+  }
+  return headers;
+}
+
 export const api = {
   // Download full 1MB Canvas as binary buffer
   async getCanvasBinary() {
@@ -21,11 +31,11 @@ export const api = {
     return await res.json();
   },
 
-  // Batch place pixels
+  // Batch place pixels (Authenticated)
   async placePixels(userId, pixels) {
     const res = await fetch(`${API_BASE}/canvas/place-pixels`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ userId, pixels }),
     });
     const data = await res.json();
@@ -42,6 +52,12 @@ export const api = {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Auth failed");
+    
+    if (data.token) {
+      authToken = data.token;
+      localStorage.setItem("pw_auth_token", data.token);
+    }
+    
     return data;
   },
 
@@ -58,11 +74,11 @@ export const api = {
     return await res.json();
   },
 
-  // Watch Ad reward claim (AdsGram)
+  // Watch Ad reward claim (Authenticated)
   async claimAdReward(userId) {
     const res = await fetch(`${API_BASE}/store/watch-ad`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ userId }),
     });
     const data = await res.json();
@@ -70,11 +86,11 @@ export const api = {
     return data;
   },
 
-  // Claim Daily streak
+  // Claim Daily streak (Authenticated)
   async claimDailyReward(userId) {
     const res = await fetch(`${API_BASE}/store/claim-daily`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ userId }),
     });
     const data = await res.json();
@@ -82,21 +98,21 @@ export const api = {
     return data;
   },
 
-  // Create Stars invoice
+  // Create Stars invoice (Authenticated)
   async createStarsInvoice(userId, packageId) {
     const res = await fetch(`${API_BASE}/store/create-invoice`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ userId, packageId }),
     });
     return await res.json();
   },
 
-  // Simulate Stars purchase (testing / sandbox)
+  // Simulate Stars purchase (dev only)
   async simulateStarsPurchase(userId, packageId) {
     const res = await fetch(`${API_BASE}/store/simulate-stars-purchase`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ userId, packageId }),
     });
     const data = await res.json();
@@ -119,12 +135,6 @@ export const api = {
   // Referrals
   async getReferralStats(userId) {
     const res = await fetch(`${API_BASE}/airdrop/referrals/${userId}`);
-    return await res.json();
-  },
-
-  // Recent placements stream
-  async getRecentActivity() {
-    const res = await fetch(`${API_BASE}/airdrop/recent-activity`);
     return await res.json();
   },
 };

@@ -1,11 +1,11 @@
 import express from "express";
-import { validateTelegramInitData, getOrCreateUser } from "../services/auth.js";
+import { validateTelegramInitData, getOrCreateUser, generateAuthToken } from "../services/auth.js";
 import { db } from "../database/db.js";
 import { CONFIG } from "../config.js";
 
 export const userRouter = express.Router();
 
-// Authenticate or initialize user from Telegram initData
+// Authenticate user with Telegram initData & generate signed auth token
 userRouter.post("/auth", (req, res) => {
   const { initData, devUserId, devUsername, referrerId } = req.body;
 
@@ -15,13 +15,13 @@ userRouter.post("/auth", (req, res) => {
     tgUser = validateTelegramInitData(initData);
   }
 
-  // Fallback for development / browser testing
+  // Fallback for development / browser testing only
   if (!tgUser && (devUserId || CONFIG.NODE_ENV === "development")) {
     const id = devUserId || "guest_1001";
     tgUser = {
       id: id,
       username: devUsername || `player_${id.slice(-4)}`,
-      first_name: "Pixel Master",
+      first_name: "Pixel Warrior",
     };
   }
 
@@ -31,12 +31,12 @@ userRouter.post("/auth", (req, res) => {
 
   try {
     const user = getOrCreateUser(tgUser, referrerId);
-    
-    // Count active referrals
+    const token = generateAuthToken(user.id);
     const refCount = db.prepare("SELECT COUNT(*) as count FROM users WHERE referrer_id = ?").get(user.id).count;
 
     res.json({
       success: true,
+      token,
       user: {
         id: user.id,
         username: user.username,

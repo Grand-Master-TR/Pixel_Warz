@@ -1,6 +1,7 @@
 import express from "express";
 import { canvasManager } from "../services/canvasManager.js";
 import { airdropEngine } from "../services/airdropEngine.js";
+import { requireAuth } from "../services/auth.js";
 import { CONFIG } from "../config.js";
 
 export const canvasRouter = express.Router();
@@ -29,33 +30,60 @@ canvasRouter.get("/state", (req, res) => {
   });
 });
 
-// Inspect a single pixel at (x, y)
+// Inspect a single pixel at (x, y) with strict integer bounds check
 canvasRouter.get("/pixel-info/:x/:y", (req, res) => {
   const x = parseInt(req.params.x, 10);
   const y = parseInt(req.params.y, 10);
-  if (isNaN(x) || isNaN(y)) {
-    return res.status(400).json({ error: "Invalid coordinates." });
+
+  if (isNaN(x) || isNaN(y) || x < 0 || x >= CONFIG.CANVAS_WIDTH || y < 0 || y >= CONFIG.CANVAS_HEIGHT) {
+    return res.status(400).json({ error: "Coordinates out of bounds (0 to 999)." });
   }
 
   const info = canvasManager.getPixelInfo(x, y);
   if (!info) {
-    return res.status(404).json({ error: "Coordinates out of bounds (0-999)." });
+    return res.status(404).json({ error: "Pixel info not found." });
   }
 
   res.json(info);
 });
 
-// Batch place pixels
-canvasRouter.post("/place-pixels", (req, res) => {
-  const { userId, pixels } = req.body;
-  if (!userId || !pixels || !Array.isArray(pixels)) {
-    return res.status(400).json({ error: "userId and pixels array are required." });
+// Batch place pixels (Protected with requireAuth & Strict Input Sanitization)
+canvasRouter.post("/place-pixels", requireAuth, (req, res) => {
+  const userId = req.userId;
+  const { pixels } = req.body;
+
+  if (!pixels || !Array.isArray(pixels)) {
+    return res.status(400).json({ error: "Invalid payload: pixels array required." });
+  }
+
+  // Prevent memory spikes: Maximum 500 pixels in a single batch request
+  if (pixels.length === 0 || pixels.length > 500) {
+    return res.status(400).json({ error: "Batch size must be between 1 and 500 pixels." });
+  }
+
+  // Deduplicate and validate each pixel coordinate & color
+  const sanitizedMap = new Map();
+  for (const p of pixels) {
+    const x = parseInt(p.x, 10);
+    const y = parseInt(p.y, 10);
+    const colorIndex = parseInt(p.colorIndex, 10);
+
+    if (isNaN(x) || isNaN(y) || isNaN(colorIndex)) continue;
+    if (x < 0 || x >= CONFIG.CANVAS_WIDTH || y < 0 || y >= CONFIG.CANVAS_HEIGHT) continue;
+    if (colorIndex < 0 || colorIndex >= CONFIG.PALETTE.length) continue;
+
+    sanitizedMap.set(`${x}_${y}`, { x, y, colorIndex });
+  }
+
+  const sanitizedPixels = Array.from(sanitizedMap.values());
+  if (sanitizedPixels.length === 0) {
+    return res.status(400).json({ error: "No valid pixels provided in batch." });
   }
 
   try {
-    const result = airdropEngine.processPixelPlacements(userId, pixels);
+    const result = airdropEngine.processPixelPlacements(userId, sanitizedPixels);
     
-    // Broadcast updates via WebSocket if attached to req.app
+    // Broadcast updates via WebSocket
     if (req.app.get("broadcastPixelUpdates")) {
       req.app.get("broadcastPixelUpdates")(result.appliedPixels);
     }
