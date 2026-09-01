@@ -1,5 +1,12 @@
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import { db } from "../database/db.js";
 import { CONFIG } from "../config.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const LOGO_JSON_PATH = path.join(__dirname, "../database/logo_pixels.json");
 
 class CanvasManager {
   constructor() {
@@ -14,6 +21,37 @@ class CanvasManager {
   init() {
     console.log("🎨 Initializing 1,000,000-pixel Canvas Buffer from database...");
     try {
+      // 1. Check if official logo needs to be seeded
+      const count = db.prepare("SELECT COUNT(*) as c FROM pixels WHERE last_placed_by = 'PIXEL_WARZ'").get().c;
+      if (count === 0 && fs.existsSync(LOGO_JSON_PATH)) {
+        console.log("🎨 Seeding Official PIXEL WARZ Logo at canvas center...");
+        try {
+          const logoData = JSON.parse(fs.readFileSync(LOGO_JSON_PATH, "utf8"));
+          const now = Math.floor(Date.now() / 1000);
+          const insertLogoPixel = db.prepare(`
+            INSERT INTO pixels (pixel_index, x, y, color_index, last_placed_by, last_placed_at, recolor_count)
+            VALUES (?, ?, ?, ?, 'PIXEL_WARZ', ?, 1)
+            ON CONFLICT(pixel_index) DO UPDATE SET
+              color_index = excluded.color_index,
+              last_placed_by = excluded.last_placed_by,
+              last_placed_at = excluded.last_placed_at
+          `);
+
+          const insertBatch = db.transaction(() => {
+            for (const p of logoData) {
+              const pixelIndex = p.y * this.width + p.x;
+              insertLogoPixel.run(pixelIndex, p.x, p.y, p.colorIndex, now);
+              this.buffer[pixelIndex] = p.colorIndex;
+            }
+          });
+          insertBatch();
+          console.log(`✅ Seeded ${logoData.length} PIXEL WARZ Logo pixels into canvas!`);
+        } catch (seedErr) {
+          console.warn("⚠️ Error seeding logo:", seedErr.message);
+        }
+      }
+
+      // 2. Load all placed pixels from database into memory buffer
       const rows = db.prepare("SELECT pixel_index, color_index FROM pixels").all();
       for (const row of rows) {
         if (row.pixel_index >= 0 && row.pixel_index < this.totalPixels) {
@@ -60,12 +98,14 @@ class CanvasManager {
       };
     }
 
+    const isSystem = row.last_placed_by === "PIXEL_WARZ";
+
     return {
       x, y, pixelIndex,
       colorIndex: row.color_index,
       colorHex: CONFIG.PALETTE[row.color_index] || "#FFFFFF",
       lastPlacedBy: row.last_placed_by,
-      username: row.username || row.first_name || `User ${row.last_placed_by?.slice(0, 6)}`,
+      username: isSystem ? "⚔️ PIXEL WARZ OFFICIAL" : (row.username || row.first_name || `User ${row.last_placed_by?.slice(0, 6)}`),
       lastPlacedAt: row.last_placed_at,
       recolorCount: row.recolor_count,
       isPlaced: true,
