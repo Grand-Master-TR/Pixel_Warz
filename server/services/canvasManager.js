@@ -18,37 +18,52 @@ class CanvasManager {
     this.dirty = false;
   }
 
+  seedLogoIfMissing() {
+    if (!fs.existsSync(LOGO_JSON_PATH)) return;
+    try {
+      const logoData = JSON.parse(fs.readFileSync(LOGO_JSON_PATH, "utf8"));
+      const now = Math.floor(Date.now() / 1000);
+      console.log(`🎨 Seeding complete Official PIXEL WARZ Logo (${logoData.length} pixels)...`);
+
+      // Update memory buffer immediately
+      for (const p of logoData) {
+        const pixelIndex = p.y * this.width + p.x;
+        this.buffer[pixelIndex] = p.colorIndex;
+      }
+
+      // Fast chunked insert (400 pixels per batch SQL statement)
+      const chunkSize = 400;
+      for (let i = 0; i < logoData.length; i += chunkSize) {
+        const chunk = logoData.slice(i, i + chunkSize);
+        const placeholders = chunk.map(() => "(?, ?, ?, ?, 'PIXEL_WARZ', ?, 1)").join(",");
+        const values = [];
+        for (const p of chunk) {
+          const pixelIndex = p.y * this.width + p.x;
+          values.push(pixelIndex, p.x, p.y, p.colorIndex, now);
+        }
+
+        db.prepare(`
+          INSERT INTO pixels (pixel_index, x, y, color_index, last_placed_by, last_placed_at, recolor_count)
+          VALUES ${placeholders}
+          ON CONFLICT(pixel_index) DO UPDATE SET
+            color_index = excluded.color_index,
+            last_placed_by = excluded.last_placed_by,
+            last_placed_at = excluded.last_placed_at
+        `).run(...values);
+      }
+      console.log(`✅ Official PIXEL WARZ Logo (${logoData.length} pixels) fully seeded in database!`);
+    } catch (err) {
+      console.warn("⚠️ Error seeding logo:", err.message);
+    }
+  }
+
   init() {
     console.log("🎨 Initializing 1,000,000-pixel Canvas Buffer from database...");
     try {
-      // 1. Check if official logo needs to be seeded
-      const count = db.prepare("SELECT COUNT(*) as c FROM pixels WHERE last_placed_by = 'PIXEL_WARZ'").get().c;
-      if (count === 0 && fs.existsSync(LOGO_JSON_PATH)) {
-        console.log("🎨 Seeding Official PIXEL WARZ Logo at canvas center...");
-        try {
-          const logoData = JSON.parse(fs.readFileSync(LOGO_JSON_PATH, "utf8"));
-          const now = Math.floor(Date.now() / 1000);
-          const insertLogoPixel = db.prepare(`
-            INSERT INTO pixels (pixel_index, x, y, color_index, last_placed_by, last_placed_at, recolor_count)
-            VALUES (?, ?, ?, ?, 'PIXEL_WARZ', ?, 1)
-            ON CONFLICT(pixel_index) DO UPDATE SET
-              color_index = excluded.color_index,
-              last_placed_by = excluded.last_placed_by,
-              last_placed_at = excluded.last_placed_at
-          `);
-
-          const insertBatch = db.transaction(() => {
-            for (const p of logoData) {
-              const pixelIndex = p.y * this.width + p.x;
-              insertLogoPixel.run(pixelIndex, p.x, p.y, p.colorIndex, now);
-              this.buffer[pixelIndex] = p.colorIndex;
-            }
-          });
-          insertBatch();
-          console.log(`✅ Seeded ${logoData.length} PIXEL WARZ Logo pixels into canvas!`);
-        } catch (seedErr) {
-          console.warn("⚠️ Error seeding logo:", seedErr.message);
-        }
+      // 1. Seed or re-seed complete logo if pixel count is incomplete
+      const count = db.prepare("SELECT COUNT(*) as c FROM pixels WHERE last_placed_by = 'PIXEL_WARZ'").get()?.c || 0;
+      if (count < 35000) {
+        this.seedLogoIfMissing();
       }
 
       // 2. Load all placed pixels from database into memory buffer
