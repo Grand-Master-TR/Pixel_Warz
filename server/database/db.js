@@ -5,42 +5,50 @@ import { CONFIG } from "../config.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const dbPath = path.join(__dirname, "pixel_game.db");
 
-// Configure LibSQL with automatic Turso Cloud Sync if environment variables are provided
-const dbOptions = {};
-const tursoUrl = process.env.TURSO_DATABASE_URL || process.env.DATABASE_URL || process.env.TURSO_URL;
-const tursoToken = process.env.TURSO_AUTH_TOKEN || process.env.TURSO_TOKEN;
+// Store db file in /tmp on Render (ephemeral is fine — we sync from cloud on boot)
+const dbPath = process.env.NODE_ENV === "production"
+  ? "/tmp/pixel_game.db"
+  : path.join(__dirname, "pixel_game.db");
 
-if (tursoUrl && tursoToken) {
-  dbOptions.syncUrl = tursoUrl.trim();
-  dbOptions.authToken = tursoToken.trim();
-  dbOptions.syncInterval = 60000; // Auto sync with Turso cloud every 60s
-  console.log(" Connected to Turso Cloud LibSQL Database:", dbOptions.syncUrl);
+// Build connection options
+const tursoUrl = (process.env.TURSO_DATABASE_URL || process.env.DATABASE_URL || "").trim();
+const tursoToken = (process.env.TURSO_AUTH_TOKEN || process.env.TURSO_TOKEN || "").trim();
+
+const isTurso = tursoUrl.startsWith("libsql://") && tursoToken.length > 0;
+
+const dbOptions = isTurso
+  ? { syncUrl: tursoUrl, authToken: tursoToken, syncInterval: 60000 }
+  : {};
+
+if (isTurso) {
+  console.log("🌩️  Turso Cloud LibSQL detected. Syncing on boot from:", tursoUrl);
 } else {
-  console.log(" Using Local SQLite/LibSQL storage at:", dbPath);
+  console.log("💾 No Turso env vars found. Using local SQLite at:", dbPath);
+  console.log("   Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN on Render for persistent storage.");
 }
 
-export const db = new Database(dbPath, dbOptions);
+// Open the database
+export let db = new Database(dbPath, dbOptions);
 
-// Enable WAL mode for high concurrency
 try {
   db.pragma("journal_mode = WAL");
   db.pragma("synchronous = NORMAL");
 } catch (e) {}
 
-// Initialize Database Schema
-export function initDatabase() {
-  // If connected to Turso Cloud, perform immediate synchronization
-  if (dbOptions.syncUrl) {
-    try {
-      db.sync();
-      console.log(" Initial sync with Turso Cloud completed.");
-    } catch (syncErr) {
-      console.warn("⚠️ Initial Turso sync warning:", syncErr.message);
-    }
+// CRITICAL: sync FROM Turso cloud BEFORE touching schema so data is restored
+if (isTurso) {
+  try {
+    console.log("🔄 Pulling data from Turso Cloud...");
+    db.sync();
+    console.log("✅ Turso sync complete. Existing data restored.");
+  } catch (syncErr) {
+    console.error("❌ Turso sync failed on boot:", syncErr.message);
+    console.error("   Check TURSO_DATABASE_URL and TURSO_AUTH_TOKEN on Render env vars.");
   }
+}
 
+export function initDatabase() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
@@ -122,44 +130,41 @@ export function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_round_snapshots_round ON round_snapshots(round_number);
   `);
 
-  // Migrate: Ensure columns exist
-  try {
-    const tableInfo = db.prepare("PRAGMA table_info(users)").all();
-    const hasWallet = tableInfo.some((col) => col.name === "wallet_address");
-    if (!hasWallet) {
-      db.exec("ALTER TABLE users ADD COLUMN wallet_address TEXT;");
-    }
-    const hasTasks = tableInfo.some((col) => col.name === "completed_tasks");
-    if (!hasTasks) {
-      db.exec("ALTER TABLE users ADD COLUMN completed_tasks TEXT DEFAULT '[]';");
-    }
-    const hasBombs = tableInfo.some((col) => col.name === "bomb_balance");
-    if (!hasBombs) {
-      db.exec("ALTER TABLE users ADD COLUMN bomb_balance INTEGER DEFAULT 1;");
-    }
-  } catch (e) {}
+  // Add missing columns to existing tables (migration safety)
+  const safeAlter = (sql) => { try { db.exec(sql); } catch (e) {} };
+  safeAlter("ALTER TABLE users ADD COLUMN wallet_address TEXT;");
+  safeAlter("ALTER TABLE users ADD COLUMN completed_tasks TEXT DEFAULT '[]';");
+  safeAlter("ALTER TABLE users ADD COLUMN bomb_balance INTEGER DEFAULT 1;");
+  safeAlter("ALTER TABLE users ADD COLUMN fresh_pixels_placed INTEGER DEFAULT 0;");
+  safeAlter("ALTER TABLE users ADD COLUMN recolored_pixels_placed INTEGER DEFAULT 0;");
 
-  // Initialize milestone rounds (1 to 50 with 100M each up to 5B)
-  const count = db.prepare("SELECT COUNT(*) as count FROM milestones").get().count;
+  // Insert milestone rounds only if empty
+  const count = db.prepare("SELECT COUNT(*) as c FROM milestones").get().c;
   if (count === 0) {
-    const insertMilestone = db.prepare(`
-      INSERT INTO milestones (round_number, target_pixels, status)
-      VALUES (?, ?, ?)
-    `);
-    const insertMany = db.transaction(() => {
+    const ins = db.prepare("INSERT INTO milestones (round_number, target_pixels, status) VALUES (?, ?, ?)");
+    db.transaction(() => {
       for (let r = 1; r <= CONFIG.ROUNDS.MAX_ROUNDS; r++) {
-        const target = r * CONFIG.ROUNDS.PIXELS_PER_ROUND;
-        insertMilestone.run(r, target, r === 1 ? "ACTIVE" : "LOCKED");
+        ins.run(r, r * CONFIG.ROUNDS.PIXELS_PER_ROUND, r === 1 ? "ACTIVE" : "LOCKED");
       }
-    });
-    insertMany();
+    })();
   }
 
-  // Initialize global stats
-  const getStat = db.prepare("SELECT value FROM system_stats WHERE key = 'total_pixels_placed'").get();
-  if (!getStat) {
+  // Ensure global pixel counter exists
+  const hasStat = db.prepare("SELECT 1 FROM system_stats WHERE key='total_pixels_placed'").get();
+  if (!hasStat) {
     db.prepare("INSERT INTO system_stats (key, value) VALUES ('total_pixels_placed', '0')").run();
   }
 
-  console.log(` Database initialized with ${CONFIG.STARTER_FREE_PIXELS} Starter Pixels, 1 Free Paint Bomb, Tasks, and Milestone Snapshots.`);
+  console.log(`✅ Database ready. ${isTurso ? "Turso Cloud" : "Local SQLite"} | Starter: ${CONFIG.STARTER_FREE_PIXELS}px + 1 bomb`);
+}
+
+// Expose sync function for periodic use in index.js
+export function syncToCloud() {
+  if (isTurso) {
+    try {
+      db.sync();
+    } catch (e) {
+      console.warn("Turso periodic sync warning:", e.message);
+    }
+  }
 }
