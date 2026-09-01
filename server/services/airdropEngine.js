@@ -50,10 +50,10 @@ class AirdropEngine {
         let points = 0;
         if (applied.isRecolor) {
           recolorCount++;
-          points = CONFIG.POINTS.RECOLOR_PIXEL; // 1.5 pts
+          points = CONFIG.POINTS.RECOLOR_PIXEL; // 15.0 pts (10x)
         } else {
           freshCount++;
-          points = CONFIG.POINTS.FRESH_PIXEL;   // 1.0 pt
+          points = CONFIG.POINTS.FRESH_PIXEL;   // 10.0 pts (10x)
         }
 
         totalPointsAwarded += points;
@@ -78,10 +78,8 @@ class AirdropEngine {
       `).run(totalPlaced, totalPlaced, freshCount, recolorCount, totalPointsAwarded, userId);
 
       // Handle 10% Referral Commission
-      let referralBonusGiven = 0;
       if (user.referrer_id) {
         const referralBonus = totalPointsAwarded * CONFIG.POINTS.REFERRAL_RATE; // 10%
-        referralBonusGiven = referralBonus;
 
         db.prepare(`
           UPDATE users SET
@@ -109,7 +107,7 @@ class AirdropEngine {
       const newGlobal = currentGlobal + totalPlaced;
       db.prepare("UPDATE system_stats SET value = ? WHERE key = 'total_pixels_placed'").run(newGlobal.toString());
 
-      // Update Milestone Rounds
+      // Check and advance Milestone Rounds & Snapshot
       this.checkMilestones(newGlobal, now);
     });
 
@@ -129,22 +127,89 @@ class AirdropEngine {
     };
   }
 
-  // Check and advance 50-round milestones
+  // Check and advance 50-round milestones & snapshot all user data
   checkMilestones(globalPixelsPlaced, timestamp) {
     const currentActive = db.prepare("SELECT * FROM milestones WHERE status = 'ACTIVE' ORDER BY round_number ASC LIMIT 1").get();
     if (!currentActive) return;
 
     if (globalPixelsPlaced >= currentActive.target_pixels) {
-      // Mark current round as completed
+      // 1. Snapshot all users who earned airdrop points or placed pixels
+      const allQualifyingUsers = db.prepare(`
+        SELECT 
+          id,
+          username,
+          first_name,
+          wallet_address,
+          airdrop_points,
+          referral_points,
+          total_pixels_placed,
+          fresh_pixels_placed,
+          recolored_pixels_placed,
+          referrer_id
+        FROM users
+        WHERE airdrop_points > 0 OR total_pixels_placed > 0
+        ORDER BY airdrop_points DESC
+      `).all();
+
+      const totalPoints = allQualifyingUsers.reduce((sum, u) => sum + (u.airdrop_points || 0), 0);
+      const snapshotPayload = {
+        roundNumber: currentActive.round_number,
+        targetPixels: currentActive.target_pixels,
+        globalPixelsPlacedAtSnapshot: globalPixelsPlaced,
+        timestamp,
+        date: new Date(timestamp * 1000).toISOString(),
+        totalUsers: allQualifyingUsers.length,
+        totalPointsDistributed: totalPoints,
+        users: allQualifyingUsers
+      };
+
+      // 2. Save snapshot in SQLite round_snapshots table
+      db.prepare(`
+        INSERT INTO round_snapshots (round_number, target_pixels, reached_at, total_users_count, total_points_distributed, snapshot_json)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(
+        currentActive.round_number,
+        currentActive.target_pixels,
+        timestamp,
+        allQualifyingUsers.length,
+        totalPoints,
+        JSON.stringify(snapshotPayload)
+      );
+
+      console.log(`📸 AIRDROP SNAPSHOT CAPTURED FOR ROUND ${currentActive.round_number}: Stored ${allQualifyingUsers.length} users with ${totalPoints} total points!`);
+
+      // 3. Mark current round as completed
       db.prepare("UPDATE milestones SET status = 'COMPLETED', reached_at = ? WHERE round_number = ?")
         .run(timestamp, currentActive.round_number);
 
-      // Unlock next round if available
+      // 4. Unlock next round if available
       const nextRoundNum = currentActive.round_number + 1;
       if (nextRoundNum <= CONFIG.ROUNDS.MAX_ROUNDS) {
         db.prepare("UPDATE milestones SET status = 'ACTIVE' WHERE round_number = ?").run(nextRoundNum);
       }
     }
+  }
+
+  // Get list of all completed round snapshots
+  getSnapshotsList() {
+    return db.prepare(`
+      SELECT 
+        id, 
+        round_number, 
+        target_pixels, 
+        reached_at, 
+        total_users_count, 
+        total_points_distributed 
+      FROM round_snapshots 
+      ORDER BY round_number DESC
+    `).all();
+  }
+
+  // Get full snapshot JSON for a specific round
+  getSnapshotByRound(roundNumber) {
+    const record = db.prepare("SELECT * FROM round_snapshots WHERE round_number = ?").get(roundNumber);
+    if (!record) return null;
+    return JSON.parse(record.snapshot_json);
   }
 
   // Get current milestone info
@@ -187,6 +252,7 @@ class AirdropEngine {
         id, 
         username, 
         first_name, 
+        wallet_address,
         total_pixels_placed, 
         recolored_pixels_placed,
         fresh_pixels_placed, 

@@ -1,5 +1,5 @@
 import express from "express";
-import { validateTelegramInitData, getOrCreateUser, generateAuthToken } from "../services/auth.js";
+import { validateTelegramInitData, getOrCreateUser, generateAuthToken, requireAuth } from "../services/auth.js";
 import { db } from "../database/db.js";
 import { CONFIG } from "../config.js";
 
@@ -41,6 +41,7 @@ userRouter.post("/auth", (req, res) => {
         id: user.id,
         username: user.username,
         firstName: user.first_name,
+        walletAddress: user.wallet_address || null,
         pixelBalance: user.pixel_balance,
         totalPixelsPlaced: user.total_pixels_placed,
         freshPixelsPlaced: user.fresh_pixels_placed,
@@ -53,6 +54,32 @@ userRouter.post("/auth", (req, res) => {
         lastAdWatch: user.last_ad_watch,
         referralCount: refCount,
       }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Save / Update User's TON or Crypto Wallet Address for Airdrops (Protected)
+userRouter.post("/save-wallet", requireAuth, (req, res) => {
+  const userId = req.userId;
+  const { walletAddress } = req.body;
+
+  if (!walletAddress || typeof walletAddress !== "string") {
+    return res.status(400).json({ error: "Invalid wallet address." });
+  }
+
+  const cleanAddress = walletAddress.trim();
+  if (cleanAddress.length < 8 || cleanAddress.length > 120) {
+    return res.status(400).json({ error: "Wallet address length must be between 8 and 120 characters." });
+  }
+
+  try {
+    db.prepare("UPDATE users SET wallet_address = ? WHERE id = ?").run(cleanAddress, userId);
+    console.log(`💳 Wallet linked for user ${userId}: ${cleanAddress}`);
+    res.json({
+      success: true,
+      walletAddress: cleanAddress,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -73,6 +100,7 @@ userRouter.get("/profile/:id", (req, res) => {
     id: user.id,
     username: user.username,
     firstName: user.first_name,
+    walletAddress: user.wallet_address || null,
     pixelBalance: user.pixel_balance,
     totalPixelsPlaced: user.total_pixels_placed,
     freshPixelsPlaced: user.fresh_pixels_placed,

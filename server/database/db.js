@@ -20,6 +20,7 @@ export function initDatabase() {
       id TEXT PRIMARY KEY,
       username TEXT,
       first_name TEXT,
+      wallet_address TEXT,
       pixel_balance INTEGER DEFAULT ${CONFIG.STARTER_FREE_PIXELS},
       total_pixels_placed INTEGER DEFAULT 0,
       fresh_pixels_placed INTEGER DEFAULT 0,
@@ -71,6 +72,16 @@ export function initDatabase() {
       status TEXT DEFAULT 'LOCKED'
     );
 
+    CREATE TABLE IF NOT EXISTS round_snapshots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      round_number INTEGER NOT NULL,
+      target_pixels INTEGER NOT NULL,
+      reached_at INTEGER NOT NULL,
+      total_users_count INTEGER NOT NULL,
+      total_points_distributed REAL NOT NULL,
+      snapshot_json TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS system_stats (
       key TEXT PRIMARY KEY,
       value TEXT
@@ -80,9 +91,20 @@ export function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_users_referrer ON users(referrer_id);
     CREATE INDEX IF NOT EXISTS idx_pixels_coords ON pixels(x, y);
     CREATE INDEX IF NOT EXISTS idx_placements_created ON placements_log(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_round_snapshots_round ON round_snapshots(round_number);
   `);
 
-  // Initialize milestone rounds (1 to 50)
+  // Migrate: Ensure wallet_address column exists if migrating existing db
+  try {
+    const tableInfo = db.prepare("PRAGMA table_info(users)").all();
+    const hasWallet = tableInfo.some((col) => col.name === "wallet_address");
+    if (!hasWallet) {
+      db.exec("ALTER TABLE users ADD COLUMN wallet_address TEXT;");
+      console.log(" Added wallet_address column to users table.");
+    }
+  } catch (e) {}
+
+  // Initialize milestone rounds (1 to 50 with 100M each up to 5B)
   const count = db.prepare("SELECT COUNT(*) as count FROM milestones").get().count;
   if (count === 0) {
     const insertMilestone = db.prepare(`
@@ -104,5 +126,5 @@ export function initDatabase() {
     db.prepare("INSERT INTO system_stats (key, value) VALUES ('total_pixels_placed', '0')").run();
   }
 
-  console.log(` Database initialized with ${CONFIG.STARTER_FREE_PIXELS} Starter Pixel.`);
+  console.log(` Database initialized with ${CONFIG.STARTER_FREE_PIXELS} Starter Pixels and Milestone Snapshots.`);
 }

@@ -61,6 +61,18 @@ export const api = {
     return data;
   },
 
+  // Save / Link TON or Crypto Wallet Address for Airdrop
+  async saveWallet(userId, walletAddress) {
+    const res = await fetch(`${API_BASE}/user/save-wallet`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ userId, walletAddress }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to save wallet address");
+    return data;
+  },
+
   // Get user profile
   async getProfile(userId) {
     const res = await fetch(`${API_BASE}/user/profile/${userId}`);
@@ -135,6 +147,12 @@ export const api = {
   // Referrals
   async getReferralStats(userId) {
     const res = await fetch(`${API_BASE}/airdrop/referrals/${userId}`);
+    return await res.json();
+  },
+
+  // Snapshots
+  async getRoundSnapshots() {
+    const res = await fetch(`${API_BASE}/airdrop/snapshots`);
     return await res.json();
   },
 };

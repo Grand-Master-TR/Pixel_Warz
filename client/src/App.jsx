@@ -10,6 +10,7 @@ import { MiniMap } from "./components/canvas/MiniMap.jsx";
 import { StarsShop } from "./components/store/StarsShop.jsx";
 import { AdsGramPlayer } from "./components/store/AdsGramPlayer.jsx";
 import { DailyClaim } from "./components/store/DailyClaim.jsx";
+import { WalletConnector } from "./components/airdrop/WalletConnector.jsx";
 import { MilestoneProgress } from "./components/airdrop/MilestoneProgress.jsx";
 import { StatsCard } from "./components/airdrop/StatsCard.jsx";
 import { Leaderboard } from "./components/airdrop/Leaderboard.jsx";
@@ -114,6 +115,7 @@ export function App() {
 
         {activeTab === "airdrop" && (
           <div className="w-full h-full overflow-y-auto p-3.5 flex flex-col gap-3.5 max-w-lg mx-auto pb-10">
+            <WalletConnector />
             <StatsCard />
             <MilestoneProgress />
             <Leaderboard />

@@ -1,11 +1,10 @@
 import express from "express";
 import { airdropEngine } from "../services/airdropEngine.js";
 import { db } from "../database/db.js";
-import { CONFIG } from "../config.js";
 
 export const airdropRouter = express.Router();
 
-// Get Milestone Rounds Progress (50 Rounds, 10M to 500M)
+// Get Milestone Progress Stats (50 rounds up to 5 Billion pixels)
 airdropRouter.get("/milestones", (req, res) => {
   try {
     const stats = airdropEngine.getMilestoneStats();
@@ -15,92 +14,99 @@ airdropRouter.get("/milestones", (req, res) => {
   }
 });
 
-// Top 100 Leaderboard by Airdrop Points
+// Get Top 100 Leaderboard
 airdropRouter.get("/leaderboard", (req, res) => {
+  const limit = Math.min(100, parseInt(req.query.limit, 10) || 50);
   try {
-    const limit = parseInt(req.query.limit || "100", 10);
-    const leaders = airdropEngine.getLeaderboard(limit);
-    res.json({ leaderboard: leaders });
+    const topUsers = airdropEngine.getLeaderboard(limit);
+    res.json(topUsers);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Referral stats for a specific user
+// Get Referral Stats for a User
 airdropRouter.get("/referrals/:userId", (req, res) => {
   const userId = req.params.userId;
-  if (!userId) return res.status(400).json({ error: "userId is required." });
-
   try {
-    const user = db.prepare("SELECT * FROM users WHERE id = ?").get(userId);
-    if (!user) return res.status(404).json({ error: "User not found." });
-
-    const referrals = db.prepare(`
+    const recruits = db.prepare(`
       SELECT 
         id, 
         username, 
         first_name, 
         airdrop_points, 
-        total_pixels_placed,
+        total_pixels_placed, 
         created_at
       FROM users
       WHERE referrer_id = ?
       ORDER BY airdrop_points DESC
+      LIMIT 100
     `).all(userId);
 
-    // Calculate total commissions received from logs
-    const totalCommissionsEarned = user.referral_points;
+    const user = db.prepare("SELECT referral_points FROM users WHERE id = ?").get(userId);
 
     res.json({
-      referralCount: referrals.length,
-      totalCommissionPoints: totalCommissionsEarned,
-      commissionRatePercent: CONFIG.POINTS.REFERRAL_RATE * 100, // 10%
-      referrals: referrals.map((r) => ({
-        id: r.id,
-        name: r.username ? `@${r.username}` : (r.first_name || "Pixel Player"),
-        pointsEarned: r.airdrop_points,
-        bonusGivenToYou: r.airdrop_points * CONFIG.POINTS.REFERRAL_RATE,
-        totalPixelsPlaced: r.total_pixels_placed,
-        joinedAt: r.created_at,
-      }))
+      totalRecruits: recruits.length,
+      totalCommissionEarned: user?.referral_points || 0.0,
+      recruits,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Live global recent pixel activity stream
-airdropRouter.get("/recent-activity", (req, res) => {
+// Get List of Completed Round Snapshots
+airdropRouter.get("/snapshots", (req, res) => {
   try {
-    const recent = db.prepare(`
-      SELECT 
-        l.id, 
-        l.x, 
-        l.y, 
-        l.color_index, 
-        l.is_recolor, 
-        l.points_awarded, 
-        l.created_at,
-        u.username,
-        u.first_name
-      FROM placements_log l
-      LEFT JOIN users u ON l.user_id = u.id
-      ORDER BY l.id DESC
-      LIMIT 30
-    `).all();
+    const snapshots = airdropEngine.getSnapshotsList();
+    res.json(snapshots);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    res.json({
-      recent: recent.map((r) => ({
-        id: r.id,
-        x: r.x,
-        y: r.y,
-        colorHex: CONFIG.PALETTE[r.color_index] || "#FFFFFF",
-        isRecolor: !!r.is_recolor,
-        points: r.points_awarded,
-        user: r.username ? `@${r.username}` : (r.first_name || "Warrior"),
-        time: r.created_at
-      }))
+// Get Full Snapshot Data for a Specific Round (JSON)
+airdropRouter.get("/snapshots/:roundNumber", (req, res) => {
+  const roundNum = parseInt(req.params.roundNumber, 10);
+  if (isNaN(roundNum)) {
+    return res.status(400).json({ error: "Invalid round number." });
+  }
+
+  try {
+    const snapshot = airdropEngine.getSnapshotByRound(roundNum);
+    if (!snapshot) {
+      return res.status(404).json({ error: `Snapshot for Round ${roundNum} not found or round has not been completed yet.` });
+    }
+    res.json(snapshot);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Download Snapshot as CSV for Easy Token Distribution / Airdrop Execution
+airdropRouter.get("/snapshots/:roundNumber/csv", (req, res) => {
+  const roundNum = parseInt(req.params.roundNumber, 10);
+  if (isNaN(roundNum)) {
+    return res.status(400).json({ error: "Invalid round number." });
+  }
+
+  try {
+    const snapshot = airdropEngine.getSnapshotByRound(roundNum);
+    if (!snapshot || !snapshot.users) {
+      return res.status(404).json({ error: `Snapshot for Round ${roundNum} not found.` });
+    }
+
+    let csv = "Rank,User_ID,Username,First_Name,Wallet_Address,Airdrop_Points,Referral_Points,Total_Pixels\n";
+    snapshot.users.forEach((u, index) => {
+      const wallet = u.wallet_address || "NOT_CONNECTED";
+      const username = u.username ? `@${u.username}` : "";
+      const firstName = (u.first_name || "").replace(/,/g, " ");
+      csv += `${index + 1},${u.id},"${username}","${firstName}","${wallet}",${u.airdrop_points || 0},${u.referral_points || 0},${u.total_pixels_placed || 0}\n`;
     });
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename="pixel_wars_round_${roundNum}_airdrop_snapshot.csv"`);
+    res.send(csv);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
