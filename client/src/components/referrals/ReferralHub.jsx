@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useGame } from "../../context/GameContext.jsx";
 import { useTelegram } from "../../context/TelegramContext.jsx";
+import { sound } from "../../services/sound.js";
 import { api } from "../../services/api.js";
 import { Users, Copy, Share2, Check, Gift } from "lucide-react";
 
@@ -10,9 +11,9 @@ export function ReferralHub() {
   const [copied, setCopied] = useState(false);
   const [refData, setRefData] = useState(null);
 
-  // Exact registered bot username
+  // Exact registered bot username with universal deep-link (?start=ref_...)
   const botUsername = import.meta.env.VITE_BOT_USERNAME || "Pixel_Warz_bot";
-  const refLink = `https://t.me/${botUsername}?startapp=ref_${player?.id || "12345"}`;
+  const refLink = `https://t.me/${botUsername}?start=ref_${player?.id || "12345"}`;
 
   useEffect(() => {
     if (player?.id) {
@@ -25,14 +26,16 @@ export function ReferralHub() {
   const handleCopy = () => {
     navigator.clipboard.writeText(refLink);
     setCopied(true);
+    sound.playClick();
     haptic.notification("success");
     showToast("📋 Referral link copied to clipboard!", "success");
     setTimeout(() => setCopied(false), 2000);
   };
 
   const handleShare = () => {
+    sound.playClick();
     haptic.impact("medium");
-    const shareText = "👾 Join me on Pixel Wars! Paint on the 1,000,000-pixel canvas and claim 10 Free Starter Pixels! Earn your share of the 50-Round Milestone Airdrop:";
+    const shareText = "👾 Join me on Pixel Wars! Paint on the 1,000,000-pixel canvas, drop 3x3 paint bombs, and claim your share of the 50-Round Milestone Airdrop:";
     shareTelegramLink(refLink, shareText);
   };
 

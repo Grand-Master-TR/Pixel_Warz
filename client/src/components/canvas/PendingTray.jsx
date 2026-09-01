@@ -1,6 +1,7 @@
 import React from "react";
 import { useGame } from "../../context/GameContext.jsx";
-import { Sparkles, Trash2, CheckCircle2, AlertCircle } from "lucide-react";
+import { sound } from "../../services/sound.js";
+import { Bomb, Trash2, CheckCircle2, AlertCircle } from "lucide-react";
 
 export function PendingTray({ onOpenStore }) {
   const {
@@ -10,11 +11,18 @@ export function PendingTray({ onOpenStore }) {
     submitPendingPixels,
     isSubmitting,
     player,
+    activeTool,
   } = useGame();
 
   if (pendingPixels.size === 0) return null;
 
+  const isBombStaged = activeTool === "bomb" || pendingPixels.size === 9;
+  const hasBomb = (player?.bombBalance || 0) >= 1;
   const hasEnoughPixels = player && player.pixelBalance >= pendingSummary.count;
+
+  const canDetonateWithBomb = isBombStaged && hasBomb;
+  const canPaintWithPixels = hasEnoughPixels;
+
   const missingPixels = player ? Math.max(0, pendingSummary.count - player.pixelBalance) : 0;
 
   return (
@@ -23,8 +31,9 @@ export function PendingTray({ onOpenStore }) {
         {/* Top Summary Row */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="font-pixel text-[10px] text-[#f59e0b] uppercase">
-              {pendingSummary.count} {pendingSummary.count === 1 ? "Pixel" : "Pixels"} Staged
+            <span className="font-pixel text-[10px] text-[#f59e0b] uppercase flex items-center gap-1">
+              {isBombStaged && <Bomb className="w-3 h-3 text-[#ef4444]" />}
+              <span>{pendingSummary.count} {pendingSummary.count === 1 ? "Pixel" : "Pixels"} Staged</span>
             </span>
             <span className="text-slate-600">|</span>
             <div className="flex items-center gap-1.5 font-arcade text-xs">
@@ -52,9 +61,27 @@ export function PendingTray({ onOpenStore }) {
 
         {/* Action Button */}
         <div className="flex items-center gap-2">
-          {hasEnoughPixels ? (
+          {canDetonateWithBomb ? (
             <button
-              onClick={submitPendingPixels}
+              onClick={() => submitPendingPixels(true)}
+              disabled={isSubmitting}
+              className="w-full pixel-btn pixel-btn-crimson py-2.5 px-4 flex items-center justify-center gap-2 text-xs animate-pulse"
+            >
+              {isSubmitting ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <>
+                  <Bomb className="w-4 h-4 text-white" />
+                  <span>DETONATE 3x3 BOMB (1 BOMB)</span>
+                  <span className="bg-black/30 px-1.5 py-0.2 font-pixel text-[9px] ml-1">
+                    +{pendingSummary.totalPoints.toFixed(1)} PTS
+                  </span>
+                </>
+              )}
+            </button>
+          ) : canPaintWithPixels ? (
+            <button
+              onClick={() => submitPendingPixels(false)}
               disabled={isSubmitting}
               className="w-full pixel-btn pixel-btn-emerald py-2.5 px-4 flex items-center justify-center gap-2 text-xs"
             >
@@ -72,11 +99,18 @@ export function PendingTray({ onOpenStore }) {
             </button>
           ) : (
             <button
-              onClick={onOpenStore}
+              onClick={() => {
+                sound.playClick();
+                onOpenStore();
+              }}
               className="w-full pixel-btn pixel-btn-crimson py-2.5 px-4 flex items-center justify-center gap-2 text-xs"
             >
               <AlertCircle className="w-4 h-4" />
-              <span>NEED {missingPixels} MORE PIXELS (GET MORE)</span>
+              <span>
+                {isBombStaged
+                  ? "OUT OF BOMBS & PIXELS (GET IN SHOP)"
+                  : `NEED ${missingPixels} MORE PIXELS (GET MORE)`}
+              </span>
             </button>
           )}
         </div>

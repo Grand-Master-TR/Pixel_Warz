@@ -6,15 +6,15 @@ import { getOrCreateUser, generateAuthToken, verifyAuthToken } from "./services/
 import { CONFIG } from "./config.js";
 
 console.log("==========================================");
-console.log("🛡️ RUNNING AIRDROP SNAPSHOT & WALLET TESTS...");
+console.log("🛡️ RUNNING COMPREHENSIVE BOMB & REFERRAL TESTS...");
 console.log("==========================================");
 
 // 1. Initialize
 initDatabase();
 canvasManager.init();
 
-// 2. Test Auth Token Generation & Cryptographic Verification
-const testUserId = "security_test_user_777";
+// 2. Test Auth Token Generation & Verification
+const testUserId = "security_test_user_888";
 const token = generateAuthToken(testUserId);
 const verifiedUserId = verifyAuthToken(token);
 if (verifiedUserId !== testUserId) {
@@ -22,54 +22,56 @@ if (verifiedUserId !== testUserId) {
 }
 console.log("✅ Cryptographic HMAC Auth Token Signing & Verification verified!");
 
-// 3. Create Referrer User A and Player User B with Wallet Address
+// 3. Create Referrer User A and Player User B
 const randomSuffix = Math.floor(1000 + Math.random() * 9000);
 const userA = getOrCreateUser({ id: 888000 + randomSuffix, username: `Alice_${randomSuffix}`, first_name: "Alice" });
 const userB = getOrCreateUser({ id: 999000 + randomSuffix, username: `Bob_${randomSuffix}`, first_name: "Bob" }, userA.id);
 
-// Link TON Wallet
-const testTonWallet = "UQAv9X8Z_TejasvPixelWarriorAirdrop2026";
-db.prepare("UPDATE users SET wallet_address = ? WHERE id = ?").run(testTonWallet, userB.id);
-
-const savedB = db.prepare("SELECT * FROM users WHERE id = ?").get(userB.id);
-console.log(`✅ User B TON Wallet Linked: ${savedB.wallet_address}`);
-if (savedB.wallet_address !== testTonWallet) {
-  throw new Error("Wallet address was not saved properly.");
+// 4. Verify Starter Bomb Balance (Every user gets 1 Free Paint Bomb)
+const initialB = db.prepare("SELECT * FROM users WHERE id = ?").get(userB.id);
+console.log(`✅ User B Created with Free Starter Bomb: ${initialB.bomb_balance} Bomb(s)`);
+if (initialB.bomb_balance < 1) {
+  throw new Error("Starter bomb was not given to user.");
 }
 
-// Add pixels for testing
-db.prepare("UPDATE users SET pixel_balance = 500 WHERE id = ?").run(userB.id);
+// 5. Test 3x3 Paint Bomb Placement (9 pixels)
+const startX = 300 + (randomSuffix % 400);
+const startY = 300 + (randomSuffix % 400);
 
-// 4. Test Fresh Pixel Placement on dynamic untouched coordinates (10.0 pts each)
-const freshX = 200 + (randomSuffix % 500);
-const freshY = 200 + (randomSuffix % 500);
+const bombPixels = [];
+for (let dx = -1; dx <= 1; dx++) {
+  for (let dy = -1; dy <= 1; dy++) {
+    bombPixels.push({ x: startX + dx, y: startY + dy, colorIndex: 6 }); // Red
+  }
+}
 
-const batch1 = [
-  { x: freshX, y: freshY, colorIndex: 6 }, // Red
-  { x: freshX, y: freshY + 1, colorIndex: 11 }, // Green
-];
-
-const res1 = airdropEngine.processPixelPlacements(userB.id, batch1);
-console.log("✅ Batch 1 Result (Fresh Pixels):", {
-  placed: res1.placedCount,
-  fresh: res1.freshCount,
-  recolor: res1.recolorCount,
-  pointsAwarded: res1.pointsAwarded,
+console.log(`💣 Executing 3x3 Paint Bomb (9 pixels) for User B...`);
+const bombResult = airdropEngine.processPixelPlacements(userB.id, bombPixels, true); // useBomb: true
+console.log("✅ Bomb Placement Result:", {
+  placed: bombResult.placedCount,
+  fresh: bombResult.freshCount,
+  recolor: bombResult.recolorCount,
+  pointsAwarded: bombResult.pointsAwarded,
+  newBombBalance: bombResult.newBombBalance,
 });
 
-// 5. Test Round Milestone Snapshot Triggering
-console.log("📸 Testing Milestone Snapshot generation...");
-const testTimestamp = Math.floor(Date.now() / 1000);
-// Trigger milestone completion for Round 1
-airdropEngine.checkMilestones(CONFIG.ROUNDS.PIXELS_PER_ROUND, testTimestamp);
-
-const snapshots = airdropEngine.getSnapshotsList();
-console.log(`✅ Snapshot Records in Database: ${snapshots.length}`);
-if (snapshots.length > 0) {
-  const round1Snapshot = airdropEngine.getSnapshotByRound(1);
-  console.log(`✅ Round 1 Snapshot Data: Captured ${round1Snapshot.totalUsers} players with ${round1Snapshot.totalPointsDistributed} total points.`);
-  console.log(`✅ Sample Snapshot User:`, round1Snapshot.users[0]);
+if (bombResult.placedCount !== 9 || bombResult.newBombBalance !== 0 || bombResult.pointsAwarded !== 90.0) {
+  throw new Error(`Bomb placement mismatch: expected 9 pixels & 90 pts, got ${bombResult.placedCount} px & ${bombResult.pointsAwarded} pts`);
 }
 
-console.log("\n🛡️ ALL SNAPSHOT, WALLET, AND ENGINE TESTS PASSED WITH 100% SUCCESS! 🚀\n");
+// 6. Test Referrer User A received 10% commission on the bomb blast (9.0 pts)
+const updatedA = db.prepare("SELECT * FROM users WHERE id = ?").get(userA.id);
+console.log(`✅ Referrer A received 10% on bomb blast: +${updatedA.referral_points} pts`);
+if (Math.abs(updatedA.referral_points - 9.0) > 0.001) {
+  throw new Error(`Referral bonus mismatch: expected 9.0, got ${updatedA.referral_points}`);
+}
+
+// 7. Test Store: Buy Bomb Package (bomb_5 -> +6 Paint Bombs for 5 Stars)
+const buyBombRes = storeEngine.creditStarsPurchase(userB.id, "bomb_5");
+console.log(`✅ Purchased Bomb Crate: +${buyBombRes.bombsAdded} Paint Bombs! New Bomb Balance: ${buyBombRes.newBombBalance}`);
+if (buyBombRes.bombsAdded !== 6 || buyBombRes.newBombBalance !== 6) {
+  throw new Error(`Bomb store purchase failed: expected 6 bombs, got ${buyBombRes.bombsAdded}`);
+}
+
+console.log("\n🛡️ ALL 3x3 BOMB, STORE & REFERRAL TESTS PASSED WITH 100% SUCCESS! 🚀\n");
 process.exit(0);

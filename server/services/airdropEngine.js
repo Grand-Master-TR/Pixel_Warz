@@ -3,8 +3,8 @@ import { CONFIG } from "../config.js";
 import { canvasManager } from "./canvasManager.js";
 
 class AirdropEngine {
-  // Process a batch of pixel placements from a user
-  processPixelPlacements(userId, pixelsToPlace) {
+  // Process a batch of pixel placements from a user (Supports regular pixels & 3x3 Bomb power-up)
+  processPixelPlacements(userId, pixelsToPlace, useBomb = false) {
     if (!pixelsToPlace || !Array.isArray(pixelsToPlace) || pixelsToPlace.length === 0) {
       throw new Error("No pixels provided for placement.");
     }
@@ -17,8 +17,14 @@ class AirdropEngine {
       throw new Error("User not found.");
     }
 
-    if (user.pixel_balance < count) {
-      throw new Error(`Insufficient pixel balance. You have ${user.pixel_balance} pixels, but tried to place ${count}.`);
+    if (useBomb) {
+      if ((user.bomb_balance || 0) < 1) {
+        throw new Error("You do not have any Paint Bombs. Buy bombs in the Shop to blast 3x3 areas!");
+      }
+    } else {
+      if (user.pixel_balance < count) {
+        throw new Error(`Insufficient pixel balance. You have ${user.pixel_balance} pixels, but tried to place ${count}.`);
+      }
     }
 
     const now = Math.floor(Date.now() / 1000);
@@ -67,15 +73,27 @@ class AirdropEngine {
       }
 
       // Deduct balance and update user stats
-      db.prepare(`
-        UPDATE users SET
-          pixel_balance = pixel_balance - ?,
-          total_pixels_placed = total_pixels_placed + ?,
-          fresh_pixels_placed = fresh_pixels_placed + ?,
-          recolored_pixels_placed = recolored_pixels_placed + ?,
-          airdrop_points = airdrop_points + ?
-        WHERE id = ?
-      `).run(totalPlaced, totalPlaced, freshCount, recolorCount, totalPointsAwarded, userId);
+      if (useBomb) {
+        db.prepare(`
+          UPDATE users SET
+            bomb_balance = bomb_balance - 1,
+            total_pixels_placed = total_pixels_placed + ?,
+            fresh_pixels_placed = fresh_pixels_placed + ?,
+            recolored_pixels_placed = recolored_pixels_placed + ?,
+            airdrop_points = airdrop_points + ?
+          WHERE id = ?
+        `).run(totalPlaced, freshCount, recolorCount, totalPointsAwarded, userId);
+      } else {
+        db.prepare(`
+          UPDATE users SET
+            pixel_balance = pixel_balance - ?,
+            total_pixels_placed = total_pixels_placed + ?,
+            fresh_pixels_placed = fresh_pixels_placed + ?,
+            recolored_pixels_placed = recolored_pixels_placed + ?,
+            airdrop_points = airdrop_points + ?
+          WHERE id = ?
+        `).run(totalPlaced, totalPlaced, freshCount, recolorCount, totalPointsAwarded, userId);
+      }
 
       // Handle 10% Referral Commission
       if (user.referrer_id) {
@@ -94,7 +112,7 @@ class AirdropEngine {
         `).run(
           `ref_comm_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
           user.referrer_id,
-          JSON.stringify({ fromUser: userId, friendEarned: totalPointsAwarded, commission: referralBonus }),
+          JSON.stringify({ fromUser: userId, friendEarned: totalPointsAwarded, commission: referralBonus, isBomb: useBomb }),
           now
         );
       }
@@ -122,6 +140,7 @@ class AirdropEngine {
       recolorCount,
       pointsAwarded: totalPointsAwarded,
       newBalance: updatedUser.pixel_balance,
+      newBombBalance: updatedUser.bomb_balance,
       newTotalPoints: updatedUser.airdrop_points,
       appliedPixels,
     };

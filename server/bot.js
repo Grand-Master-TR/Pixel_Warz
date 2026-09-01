@@ -12,9 +12,12 @@ export function getBot() {
   return botInstance;
 }
 
-// Generate an official Telegram Stars (XTR) invoice link for the Mini App
+// Generate an official Telegram Stars (XTR) invoice link for the Mini App (Pixels & Bombs)
 export async function createStarsInvoiceLink(userId, packageId) {
-  const pkg = CONFIG.STARS_PACKAGES.find((p) => p.id === packageId);
+  const pixelPkg = CONFIG.STARS_PACKAGES.find((p) => p.id === packageId);
+  const bombPkg = CONFIG.STARS_BOMB_PACKAGES.find((p) => p.id === packageId);
+  const pkg = pixelPkg || bombPkg;
+
   if (!pkg) throw new Error("Invalid package ID");
 
   const bot = getBot();
@@ -29,13 +32,19 @@ export async function createStarsInvoiceLink(userId, packageId) {
 
   try {
     const payload = `${packageId}_${userId}_${Date.now()}`;
+    const isBomb = Boolean(bombPkg);
+    const title = isBomb ? `💣 ${pkg.bombs}x 3x3 Paint Bombs` : `💎 ${pkg.pixels} Pixel Wars Pixels`;
+    const description = isBomb
+      ? `Blast 3x3 areas (9 pixels in 1 tap) on the canvas to conquer territory and earn massive airdrop points!`
+      : `Get ${pkg.pixels} pixels instantly in Pixel Wars to conquer territory and earn airdrop points!`;
+
     const invoiceLink = await bot.api.createInvoiceLink(
-      `💎 ${pkg.pixels} Pixel Wars Pixels`,
-      `Get ${pkg.pixels} pixels instantly in Pixel Wars to conquer territory and earn airdrop points!`,
+      title,
+      description,
       payload,
       "", // Provider token is empty string for Telegram Stars (XTR)
       "XTR", // Currency is strictly XTR for Telegram Stars
-      [{ label: `${pkg.pixels} Pixels`, amount: pkg.stars }]
+      [{ label: isBomb ? `${pkg.bombs} Bombs` : `${pkg.pixels} Pixels`, amount: pkg.stars }]
     );
 
     return {
@@ -75,18 +84,18 @@ export function initTelegramBot() {
     const keyboard = new InlineKeyboard()
       .webApp("👾 Play Pixel Wars", CONFIG.WEBAPP_URL)
       .row()
-      .url("📢 Official Channel", "https://t.me/telegram")
+      .url("📢 Official Channel", "https://t.me/Pixel_Warz_Official")
       .switchInline("👥 Share Referral Link", `Play Pixel Wars with me! Use my link: https://t.me/${ctx.me.username}?startapp=ref_${user.id}`);
 
     await ctx.reply(
       `👾 **WELCOME TO PIXEL WARS!** 🎨\n\n` +
-      `🔥 1 Million Real-time Canvas. Place pixels, conquer territory, and claim your share of the **50-Round (5 Billion Pixels) Milestone Airdrop**!\n\n` +
-      `🎁 **Your Free Starter Gift:** 10 Free Pixels are ready in your inventory to make your first mark!\n` +
-      `🎯 **10x Rewards:**\n` +
+      `🔥 1 Million Real-time Canvas. Place pixels, drop 3x3 paint bombs, and claim your share of the **50-Round Milestone Airdrop**!\n\n` +
+      `🎁 **Your Free Starter Gift:** 10 Free Pixels + 1 Free 3x3 Paint Bomb ready in your arsenal!\n` +
+      `🎯 **Rewards:**\n` +
       `• Fresh Pixel: +10.0 Airdrop Points\n` +
       `• Overwrite/Recolor: +15.0 Airdrop Points (50% bonus!)\n` +
       `• Referrals: Earn 10% of all points your friends accumulate forever!\n\n` +
-      `⭐ Get more pixels with Telegram Stars (1 Star = 100 Pixels) or watch quick ads (+10 Pixels each) to keep painting!\n\n` +
+      `⭐ Get more pixels & bombs with Telegram Stars or complete tasks to earn free rewards!\n\n` +
       `Tap below to enter the canvas! 👇`,
       {
         parse_mode: "Markdown",
@@ -95,7 +104,7 @@ export function initTelegramBot() {
     );
   });
 
-  // Handle Telegram Stars Pre-Checkout Query (Always approve for Stars)
+  // Handle Telegram Stars Pre-Checkout Query
   bot.on("pre_checkout_query", async (ctx) => {
     try {
       await ctx.answerPreCheckoutQuery(true);
@@ -118,16 +127,19 @@ export function initTelegramBot() {
       const packageId = `${parts[0]}_${parts[1]}`;
       const result = storeEngine.creditStarsPurchase(userId, packageId, payment.telegram_payment_charge_id);
 
+      const itemCredited = result.isBomb
+        ? `💣 Added **+${result.bombsAdded} Paint Bombs**`
+        : `💎 Added **+${result.pixelsAdded} Pixels**`;
+
       await ctx.reply(
         `🎉 **Payment Successful!**\n\n` +
-        `💎 Added **+${result.pixelsAdded} Pixels** to your balance!\n` +
-        `🎨 Your new balance: **${result.newBalance} Pixels**.\n\n` +
+        `${itemCredited} to your inventory!\n\n` +
         `Go to the canvas and make your mark!`,
         { parse_mode: "Markdown" }
       );
     } catch (err) {
       console.error("Error fulfilling Stars payment:", err);
-      await ctx.reply("Your payment was received. Pixels will be credited shortly.");
+      await ctx.reply("Your payment was received. Items will be credited shortly.");
     }
   });
 

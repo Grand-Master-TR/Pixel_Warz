@@ -87,6 +87,7 @@ export function GameProvider({ children }) {
         walletAddress: null,
         completedTasks: [],
         pixelBalance: 10,
+        bombBalance: 1,
         airdropPoints: 0,
         referralPoints: 0,
         totalPixelsPlaced: 0,
@@ -258,23 +259,32 @@ export function GameProvider({ children }) {
     };
   })();
 
-  // 5. Submit Pixels to Server with Database Verification
-  const submitPendingPixels = async () => {
+  // 5. Submit Pixels / Bomb Detonation to Server
+  const submitPendingPixels = async (useBomb = false) => {
     if (pendingPixels.size === 0) return;
     if (!player) return;
 
-    if (player.pixelBalance < pendingPixels.size) {
-      showToast(`Need ${pendingPixels.size - player.pixelBalance} more pixels!`, "error");
-      sound.playClick();
-      haptic.notification("error");
-      return;
+    if (useBomb) {
+      if ((player.bombBalance || 0) < 1) {
+        showToast("You do not have any Paint Bombs! Get bombs in Shop.", "error");
+        sound.playClick();
+        haptic.notification("error");
+        return;
+      }
+    } else {
+      if (player.pixelBalance < pendingPixels.size) {
+        showToast(`Need ${pendingPixels.size - player.pixelBalance} more pixels!`, "error");
+        sound.playClick();
+        haptic.notification("error");
+        return;
+      }
     }
 
     setIsSubmitting(true);
     const pixelArray = Array.from(pendingPixels.values());
 
     try {
-      const res = await api.placePixels(player.id, pixelArray);
+      const res = await api.placePixels(player.id, pixelArray, useBomb);
       if (res?.success) {
         for (const p of res.appliedPixels) {
           canvasBufferRef.current[p.y * 1000 + p.x] = p.colorIndex;
@@ -283,6 +293,7 @@ export function GameProvider({ children }) {
         setPlayer((prev) => ({
           ...prev,
           pixelBalance: res.newBalance,
+          bombBalance: res.newBombBalance ?? prev.bombBalance,
           airdropPoints: res.newTotalPoints,
           totalPixelsPlaced: prev.totalPixelsPlaced + res.placedCount,
           freshPixelsPlaced: prev.freshPixelsPlaced + res.freshCount,
@@ -292,9 +303,15 @@ export function GameProvider({ children }) {
         setPendingPixels(new Map());
         setCanvasVersion((v) => v + 1);
 
-        sound.playClaimReward();
+        if (useBomb) {
+          sound.playBombBlast();
+          showToast(`💣 DETONATED 3x3 BOMB! +${res.pointsAwarded.toFixed(1)} Pts`, "success");
+        } else {
+          sound.playClaimReward();
+          showToast(`🎉 Placed ${res.placedCount} Pixels! +${res.pointsAwarded.toFixed(1)} Pts`, "success");
+        }
+
         haptic.notification("success");
-        showToast(`🎉 Placed ${res.placedCount} Pixels! +${res.pointsAwarded.toFixed(1)} Pts`, "success");
         loadMilestones();
       }
     } catch (err) {

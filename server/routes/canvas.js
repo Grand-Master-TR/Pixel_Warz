@@ -47,10 +47,10 @@ canvasRouter.get("/pixel-info/:x/:y", (req, res) => {
   res.json(info);
 });
 
-// Batch place pixels (Protected with requireAuth & Strict Input Sanitization)
+// Batch place pixels or drop 3x3 Paint Bomb (Protected with requireAuth & Strict Input Sanitization)
 canvasRouter.post("/place-pixels", requireAuth, (req, res) => {
   const userId = req.userId;
-  const { pixels } = req.body;
+  const { pixels, useBomb } = req.body;
 
   if (!pixels || !Array.isArray(pixels)) {
     return res.status(400).json({ error: "Invalid payload: pixels array required." });
@@ -81,7 +81,7 @@ canvasRouter.post("/place-pixels", requireAuth, (req, res) => {
   }
 
   try {
-    const result = airdropEngine.processPixelPlacements(userId, sanitizedPixels);
+    const result = airdropEngine.processPixelPlacements(userId, sanitizedPixels, Boolean(useBomb));
     
     // Broadcast updates via WebSocket
     if (req.app.get("broadcastPixelUpdates")) {

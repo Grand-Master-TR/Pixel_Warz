@@ -23,6 +23,7 @@ export function initDatabase() {
       wallet_address TEXT,
       completed_tasks TEXT DEFAULT '[]',
       pixel_balance INTEGER DEFAULT ${CONFIG.STARTER_FREE_PIXELS},
+      bomb_balance INTEGER DEFAULT ${CONFIG.STARTER_FREE_BOMBS || 1},
       total_pixels_placed INTEGER DEFAULT 0,
       fresh_pixels_placed INTEGER DEFAULT 0,
       recolored_pixels_placed INTEGER DEFAULT 0,
@@ -95,7 +96,7 @@ export function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_round_snapshots_round ON round_snapshots(round_number);
   `);
 
-  // Migrate: Ensure wallet_address & completed_tasks columns exist
+  // Migrate: Ensure columns exist
   try {
     const tableInfo = db.prepare("PRAGMA table_info(users)").all();
     const hasWallet = tableInfo.some((col) => col.name === "wallet_address");
@@ -105,6 +106,11 @@ export function initDatabase() {
     const hasTasks = tableInfo.some((col) => col.name === "completed_tasks");
     if (!hasTasks) {
       db.exec("ALTER TABLE users ADD COLUMN completed_tasks TEXT DEFAULT '[]';");
+    }
+    const hasBombs = tableInfo.some((col) => col.name === "bomb_balance");
+    if (!hasBombs) {
+      db.exec("ALTER TABLE users ADD COLUMN bomb_balance INTEGER DEFAULT 1;");
+      console.log(" Added bomb_balance column to users table.");
     }
   } catch (e) {}
 
@@ -130,5 +136,5 @@ export function initDatabase() {
     db.prepare("INSERT INTO system_stats (key, value) VALUES ('total_pixels_placed', '0')").run();
   }
 
-  console.log(` Database initialized with ${CONFIG.STARTER_FREE_PIXELS} Starter Pixels, Tasks, and Milestone Snapshots.`);
+  console.log(` Database initialized with ${CONFIG.STARTER_FREE_PIXELS} Starter Pixels, 1 Free Paint Bomb, Tasks, and Milestone Snapshots.`);
 }

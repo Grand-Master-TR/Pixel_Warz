@@ -31,12 +31,12 @@ export const api = {
     return await res.json();
   },
 
-  // Batch place pixels (Authenticated)
-  async placePixels(userId, pixels) {
+  // Batch place pixels or drop 3x3 Paint Bomb (Authenticated)
+  async placePixels(userId, pixels, useBomb = false) {
     const res = await fetch(`${API_BASE}/canvas/place-pixels`, {
       method: "POST",
       headers: getAuthHeaders(),
-      body: JSON.stringify({ userId, pixels }),
+      body: JSON.stringify({ userId, pixels, useBomb }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Failed to place pixels");

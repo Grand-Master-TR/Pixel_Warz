@@ -5,12 +5,13 @@ import { sound } from "../../services/sound.js";
 import { PALETTE } from "../../utils/palette.js";
 import { Paintbrush, Eye, Pipette, Bomb } from "lucide-react";
 
-export function PaletteBar() {
+export function PaletteBar({ onOpenStore }) {
   const {
     selectedColor,
     setSelectedColor,
     activeTool,
     setActiveTool,
+    player,
   } = useGame();
   const { haptic } = useTelegram();
 
@@ -22,6 +23,14 @@ export function PaletteBar() {
     sound.playClick();
     haptic.selection();
   };
+
+  const handleBombSelect = () => {
+    sound.playClick();
+    haptic.impact("medium");
+    setActiveTool("bomb");
+  };
+
+  const bombCount = player?.bombBalance || 0;
 
   return (
     <div className="flex flex-col gap-2 w-full max-w-lg mx-auto px-2">
@@ -44,13 +53,9 @@ export function PaletteBar() {
           <span>Draw</span>
         </button>
 
-        {/* 3x3 Paint Bomb Power-Up */}
+        {/* 3x3 Paint Bomb Tool */}
         <button
-          onClick={() => {
-            setActiveTool("bomb");
-            sound.playClick();
-            haptic.impact("medium");
-          }}
+          onClick={handleBombSelect}
           className={`flex items-center gap-1 px-2.5 py-1 font-pixel text-[9px] uppercase transition-all ${
             activeTool === "bomb"
               ? "pixel-btn pixel-btn-crimson text-white shadow-pixel-sm animate-pulse"
@@ -59,7 +64,7 @@ export function PaletteBar() {
           title="Paint 3x3 (9-pixel area blast)"
         >
           <Bomb className="w-3 h-3" />
-          <span>Bomb 3x3</span>
+          <span>Bomb ({bombCount})</span>
         </button>
 
         {/* Inspect Owner */}

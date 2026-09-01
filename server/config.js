@@ -13,8 +13,9 @@ export const CONFIG = {
   CANVAS_HEIGHT: 1000,
   TOTAL_CANVAS_PIXELS: 1000000,
 
-  // 10x Starter Giveaway Pixels (10 Free Pixels)
+  // Starter Giveaway Pixels & Bombs
   STARTER_FREE_PIXELS: 10,
+  STARTER_FREE_BOMBS: 1, // 1 Free 3x3 Paint Bomb for all warriors!
 
   // 10x Airdrop Point Rewards
   POINTS: {
@@ -30,13 +31,20 @@ export const CONFIG = {
     MAX_TOTAL_PIXELS: 5000000000, // 5 Billion pixels total
   },
 
-  // 10x Telegram Stars Packages (1 Star = 100 Pixels)
+  // 10x Telegram Stars Pixel Packages (1 Star = 100 Pixels)
   STARS_PACKAGES: [
     { id: "stars_1", stars: 1, pixels: 100, bonusPercent: 0, label: "Starter Pixel Pouch" },
     { id: "stars_10", stars: 10, pixels: 1000, bonusPercent: 0, label: "Colorist Box", popular: true },
     { id: "stars_50", stars: 50, pixels: 5500, bonusPercent: 10, label: "Painter Bundle" },
     { id: "stars_100", stars: 100, pixels: 12000, bonusPercent: 20, label: "Master Canvas Chest" },
     { id: "stars_500", stars: 500, pixels: 65000, bonusPercent: 30, label: "Canvas Warlord Treasury", bestValue: true },
+  ],
+
+  // Telegram Stars 3x3 Paint Bomb Packages
+  STARS_BOMB_PACKAGES: [
+    { id: "bomb_1", stars: 1, bombs: 1, label: "Single 3x3 Paint Bomb", icon: "💣" },
+    { id: "bomb_5", stars: 5, bombs: 6, bonus: "+1 FREE", label: "Bomb Crate (6 Bombs)", icon: "🧨", popular: true },
+    { id: "bomb_20", stars: 15, bombs: 25, bonus: "+5 FREE", label: "Tactical Arsenal (25 Bombs)", icon: "🚀", bestValue: true },
   ],
 
   // 10x Ad Rewards & Daily Streak Rewards (Day 1-7)

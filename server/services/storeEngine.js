@@ -2,29 +2,46 @@ import { db } from "../database/db.js";
 import { CONFIG } from "../config.js";
 
 class StoreEngine {
-  // Get available Telegram Stars packages
+  // Get available Telegram Stars packages (Pixels + Bombs)
   getPackages() {
-    return CONFIG.STARS_PACKAGES;
+    return {
+      pixels: CONFIG.STARS_PACKAGES,
+      bombs: CONFIG.STARS_BOMB_PACKAGES,
+    };
   }
 
-  // Handle Stars Purchase fulfillment
+  // Handle Stars Purchase fulfillment (Pixels OR Bombs)
   creditStarsPurchase(userId, packageId, chargeId = null) {
-    const pkg = CONFIG.STARS_PACKAGES.find((p) => p.id === packageId);
+    const pixelPkg = CONFIG.STARS_PACKAGES.find((p) => p.id === packageId);
+    const bombPkg = CONFIG.STARS_BOMB_PACKAGES.find((p) => p.id === packageId);
+    const pkg = pixelPkg || bombPkg;
+
     if (!pkg) {
       throw new Error("Invalid package ID");
     }
 
     const now = Math.floor(Date.now() / 1000);
     const txnId = `stars_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const isBomb = Boolean(bombPkg);
 
     const fulfill = db.transaction(() => {
-      db.prepare("UPDATE users SET pixel_balance = pixel_balance + ? WHERE id = ?")
-        .run(pkg.pixels, userId);
+      if (isBomb) {
+        db.prepare("UPDATE users SET bomb_balance = bomb_balance + ? WHERE id = ?")
+          .run(pkg.bombs, userId);
 
-      db.prepare(`
-        INSERT INTO transactions (id, user_id, type, amount_stars, pixels_awarded, details, created_at)
-        VALUES (?, ?, 'STARS_PURCHASE', ?, ?, ?, ?)
-      `).run(txnId, userId, pkg.stars, pkg.pixels, JSON.stringify({ packageId, chargeId }), now);
+        db.prepare(`
+          INSERT INTO transactions (id, user_id, type, amount_stars, pixels_awarded, details, created_at)
+          VALUES (?, ?, 'BOMB_PURCHASE', ?, 0, ?, ?)
+        `).run(txnId, userId, pkg.stars, JSON.stringify({ packageId, chargeId, bombs: pkg.bombs }), now);
+      } else {
+        db.prepare("UPDATE users SET pixel_balance = pixel_balance + ? WHERE id = ?")
+          .run(pkg.pixels, userId);
+
+        db.prepare(`
+          INSERT INTO transactions (id, user_id, type, amount_stars, pixels_awarded, details, created_at)
+          VALUES (?, ?, 'STARS_PURCHASE', ?, ?, ?, ?)
+        `).run(txnId, userId, pkg.stars, pkg.pixels, JSON.stringify({ packageId, chargeId }), now);
+      }
     });
 
     fulfill();
@@ -32,8 +49,11 @@ class StoreEngine {
     const user = db.prepare("SELECT * FROM users WHERE id = ?").get(userId);
     return {
       success: true,
-      pixelsAdded: pkg.pixels,
-      newBalance: user.pixel_balance,
+      isBomb,
+      bombsAdded: isBomb ? pkg.bombs : 0,
+      pixelsAdded: !isBomb ? pkg.pixels : 0,
+      newPixelBalance: user.pixel_balance,
+      newBombBalance: user.bomb_balance,
       package: pkg
     };
   }
@@ -53,7 +73,7 @@ class StoreEngine {
       throw new Error(`Ad cooldown in effect. Please wait ${waitLeft} more seconds.`);
     }
 
-    const pixelsToAdd = CONFIG.ADS.PIXELS_PER_AD; // 1 pixel per ad
+    const pixelsToAdd = CONFIG.ADS.PIXELS_PER_AD; // 10 pixels per ad (10x)
     const txnId = `ad_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
     db.transaction(() => {
@@ -79,7 +99,7 @@ class StoreEngine {
     };
   }
 
-  // Daily Streak Claim with reduced tight retention rewards
+  // Daily Streak Claim
   claimDailyStreak(userId) {
     const user = db.prepare("SELECT * FROM users WHERE id = ?").get(userId);
     if (!user) throw new Error("User not found");
@@ -89,7 +109,7 @@ class StoreEngine {
     const timeSinceLastClaim = now - user.last_daily_claim;
 
     // Check if claimed in last 20 hours
-    if (timeSinceLastClaim < 72000) {
+    if (timeSinceLastClaim < 72000 && user.last_daily_claim > 0) {
       const hoursRemaining = Math.ceil((72000 - timeSinceLastClaim) / 3600);
       throw new Error(`Daily reward already claimed. Next claim ready in ~${hoursRemaining} hours.`);
     }
@@ -100,9 +120,8 @@ class StoreEngine {
       newStreak = (user.daily_streak % 7) + 1;
     }
 
-    // Reduced Daily Streak Rewards: [1, 1, 2, 2, 3, 3, 5]
-    const rewardsArray = CONFIG.ADS.DAILY_STREAK_REWARDS || [1, 1, 2, 2, 3, 3, 5];
-    const rewardPixels = rewardsArray[newStreak - 1] || 1;
+    const rewardsArray = CONFIG.ADS.DAILY_STREAK_REWARDS || [10, 10, 20, 20, 30, 30, 50];
+    const rewardPixels = rewardsArray[newStreak - 1] || 10;
     const txnId = `daily_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
     db.transaction(() => {
