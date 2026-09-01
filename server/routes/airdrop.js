@@ -35,6 +35,62 @@ airdropRouter.get("/db-status", (req, res) => {
   });
 });
 
+// Cleanup all test / simulated accounts from database
+airdropRouter.all("/cleanup-test-users", (req, res) => {
+  try {
+    const deletedUsers = db.prepare(`
+      DELETE FROM users 
+      WHERE id LIKE 'dev_%' 
+         OR id LIKE 'guest_%' 
+         OR id LIKE 'test_%' 
+         OR id LIKE 'turso_%' 
+         OR id LIKE 'persist_%' 
+         OR id LIKE 'security_%'
+         OR username LIKE 'Alice_%'
+         OR username LIKE 'Bob_%'
+         OR username LIKE 'turso_%'
+         OR username LIKE 'Persist%'
+         OR username LIKE 'dev_%'
+         OR username LIKE 'warrior_%'
+    `).run();
+
+    db.prepare(`
+      DELETE FROM placements_log 
+      WHERE user_id LIKE 'dev_%' 
+         OR user_id LIKE 'guest_%' 
+         OR user_id LIKE 'test_%' 
+         OR user_id LIKE 'turso_%' 
+         OR user_id LIKE 'persist_%' 
+         OR user_id LIKE 'security_%'
+    `).run();
+
+    db.prepare(`
+      DELETE FROM transactions 
+      WHERE user_id LIKE 'dev_%' 
+         OR user_id LIKE 'guest_%' 
+         OR user_id LIKE 'test_%' 
+         OR user_id LIKE 'turso_%' 
+         OR user_id LIKE 'persist_%' 
+         OR user_id LIKE 'security_%'
+    `).run();
+
+    const remainingUsers = db.prepare("SELECT COUNT(*) as c FROM users").get().c;
+    const realUsers = db.prepare("SELECT id, username, first_name, airdrop_points FROM users").all();
+
+    console.log(`🧹 Cleaned up ${deletedUsers.changes} test accounts from database.`);
+
+    res.json({
+      success: true,
+      message: `Cleaned up ${deletedUsers.changes} test accounts.`,
+      deletedAccountsCount: deletedUsers.changes,
+      remainingUsersCount: remainingUsers,
+      realUsers,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Get Milestone Progress Stats (50 rounds up to 5 Billion pixels)
 airdropRouter.get("/milestones", (req, res) => {
   try {
