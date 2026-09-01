@@ -85,6 +85,21 @@ export function TelegramProvider({ children }) {
     },
   };
 
+  // Open Telegram Channel, Group or bot link natively
+  const openTelegramLink = (url) => {
+    try {
+      if (window.Telegram?.WebApp?.openTelegramLink && url.includes("t.me")) {
+        window.Telegram.WebApp.openTelegramLink(url);
+      } else if (window.Telegram?.WebApp?.openLink) {
+        window.Telegram.WebApp.openLink(url);
+      } else {
+        window.open(url, "_blank");
+      }
+    } catch (e) {
+      window.open(url, "_blank");
+    }
+  };
+
   // 1-Click Share Referral link inside Telegram
   const shareTelegramLink = (url, text) => {
     const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
@@ -116,6 +131,7 @@ export function TelegramProvider({ children }) {
         startParam,
         isTelegram,
         haptic,
+        openTelegramLink,
         shareTelegramLink,
         openInvoice,
       }}
