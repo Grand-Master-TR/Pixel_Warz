@@ -1,8 +1,9 @@
 import React from "react";
 import { useGame } from "../../context/GameContext.jsx";
 import { useTelegram } from "../../context/TelegramContext.jsx";
+import { sound } from "../../services/sound.js";
 import { PALETTE } from "../../utils/palette.js";
-import { Paintbrush, Eye, Pipette } from "lucide-react";
+import { Paintbrush, Eye, Pipette, Bomb } from "lucide-react";
 
 export function PaletteBar() {
   const {
@@ -15,22 +16,25 @@ export function PaletteBar() {
 
   const handleColorSelect = (idx) => {
     setSelectedColor(idx);
-    if (activeTool !== "brush") {
+    if (activeTool !== "brush" && activeTool !== "bomb") {
       setActiveTool("brush");
     }
+    sound.playClick();
     haptic.selection();
   };
 
   return (
     <div className="flex flex-col gap-2 w-full max-w-lg mx-auto px-2">
       {/* Tool Selector Bar */}
-      <div className="flex items-center justify-center gap-2 self-center bg-[#12141c] p-1 border-2 border-black shadow-pixel-sm">
+      <div className="flex items-center justify-center gap-1.5 self-center bg-[#12141c] p-1 border-2 border-black shadow-pixel-sm">
+        {/* Draw Brush */}
         <button
           onClick={() => {
             setActiveTool("brush");
+            sound.playClick();
             haptic.impact("light");
           }}
-          className={`flex items-center gap-1.5 px-3 py-1 font-pixel text-[9px] uppercase transition-all ${
+          className={`flex items-center gap-1 px-2.5 py-1 font-pixel text-[9px] uppercase transition-all ${
             activeTool === "brush"
               ? "pixel-btn pixel-btn-emerald text-black shadow-pixel-sm"
               : "text-slate-400 hover:text-white"
@@ -40,12 +44,32 @@ export function PaletteBar() {
           <span>Draw</span>
         </button>
 
+        {/* 3x3 Paint Bomb Power-Up */}
+        <button
+          onClick={() => {
+            setActiveTool("bomb");
+            sound.playClick();
+            haptic.impact("medium");
+          }}
+          className={`flex items-center gap-1 px-2.5 py-1 font-pixel text-[9px] uppercase transition-all ${
+            activeTool === "bomb"
+              ? "pixel-btn pixel-btn-crimson text-white shadow-pixel-sm animate-pulse"
+              : "text-[#ef4444] hover:text-[#f87171]"
+          }`}
+          title="Paint 3x3 (9-pixel area blast)"
+        >
+          <Bomb className="w-3 h-3" />
+          <span>Bomb 3x3</span>
+        </button>
+
+        {/* Inspect Owner */}
         <button
           onClick={() => {
             setActiveTool("inspect");
+            sound.playClick();
             haptic.impact("light");
           }}
-          className={`flex items-center gap-1.5 px-3 py-1 font-pixel text-[9px] uppercase transition-all ${
+          className={`flex items-center gap-1 px-2.5 py-1 font-pixel text-[9px] uppercase transition-all ${
             activeTool === "inspect"
               ? "pixel-btn pixel-btn-gold text-black shadow-pixel-sm"
               : "text-slate-400 hover:text-white"
@@ -55,12 +79,14 @@ export function PaletteBar() {
           <span>Inspect</span>
         </button>
 
+        {/* Eyedrop Color Picker */}
         <button
           onClick={() => {
             setActiveTool("pipette");
+            sound.playClick();
             haptic.impact("light");
           }}
-          className={`flex items-center gap-1.5 px-3 py-1 font-pixel text-[9px] uppercase transition-all ${
+          className={`flex items-center gap-1 px-2.5 py-1 font-pixel text-[9px] uppercase transition-all ${
             activeTool === "pipette"
               ? "pixel-btn pixel-btn-violet text-white shadow-pixel-sm"
               : "text-slate-400 hover:text-white"
@@ -71,7 +97,7 @@ export function PaletteBar() {
         </button>
       </div>
 
-      {/* 32-Color Palette Swatches with retro pixel square buttons */}
+      {/* 32-Color Palette Swatches */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 px-2 no-scrollbar scroll-smooth bg-[#12141c]/90 p-2 border-2 border-black shadow-pixel-sm">
         {PALETTE.map((c) => {
           const isSelected = selectedColor === c.id;

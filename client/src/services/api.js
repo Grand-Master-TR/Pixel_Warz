@@ -73,6 +73,26 @@ export const api = {
     return data;
   },
 
+  // Complete a Social/Community Task
+  async completeTask(userId, taskId) {
+    const res = await fetch(`${API_BASE}/user/complete-task`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ userId, taskId }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Failed to complete task");
+    return data;
+  },
+
+  // Get user tasks
+  async getTasks() {
+    const res = await fetch(`${API_BASE}/user/tasks`, {
+      headers: getAuthHeaders(),
+    });
+    return await res.json();
+  },
+
   // Get user profile
   async getProfile(userId) {
     const res = await fetch(`${API_BASE}/user/profile/${userId}`);

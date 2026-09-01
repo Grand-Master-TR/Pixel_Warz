@@ -10,7 +10,8 @@ export function ReferralHub() {
   const [copied, setCopied] = useState(false);
   const [refData, setRefData] = useState(null);
 
-  const botUsername = "pixel_wars_official_bot";
+  // Exact registered bot username
+  const botUsername = import.meta.env.VITE_BOT_USERNAME || "Pixel_Warz_bot";
   const refLink = `https://t.me/${botUsername}?startapp=ref_${player?.id || "12345"}`;
 
   useEffect(() => {
@@ -31,7 +32,7 @@ export function ReferralHub() {
 
   const handleShare = () => {
     haptic.impact("medium");
-    const shareText = "👾 Join me on Pixel Wars! Paint on the 1,000,000-pixel canvas and claim 3 Free Starter Pixels! Earn your share of the 50-Round Milestone Airdrop:";
+    const shareText = "👾 Join me on Pixel Wars! Paint on the 1,000,000-pixel canvas and claim 10 Free Starter Pixels! Earn your share of the 50-Round Milestone Airdrop:";
     shareTelegramLink(refLink, shareText);
   };
 
@@ -56,14 +57,14 @@ export function ReferralHub() {
           <div className="bg-[#181a24] p-2 border border-black text-center">
             <span className="font-pixel text-[8px] text-slate-400 block">RECRUITS</span>
             <span className="font-arcade text-xl font-bold text-white">
-              {refData?.referralCount || player?.referralCount || 0}
+              {refData?.totalRecruits || player?.referralCount || 0}
             </span>
           </div>
 
           <div className="bg-[#181a24] p-2 border border-black text-center">
             <span className="font-pixel text-[8px] text-[#a78bfa] block">10% COMMISSION</span>
             <span className="font-arcade text-xl font-bold text-[#a78bfa]">
-              +{(refData?.totalCommissionPoints || player?.referralPoints || 0).toFixed(1)} PTS
+              +{(refData?.totalCommissionEarned || player?.referralPoints || 0).toFixed(1)} PTS
             </span>
           </div>
         </div>
@@ -93,30 +94,32 @@ export function ReferralHub() {
         <div className="flex items-center justify-between border-b border-[#282c3c] pb-2">
           <h4 className="font-pixel text-xs text-white flex items-center gap-1.5 uppercase">
             <Users className="w-3.5 h-3.5 text-[#a78bfa]" />
-            <span>YOUR GUILD ({refData?.referrals?.length || 0})</span>
+            <span>YOUR GUILD ({refData?.recruits?.length || 0})</span>
           </h4>
           <span className="font-pixel text-[8px] text-[#a78bfa] bg-[#251b38] px-2 py-0.5 border border-[#7c3aed]">
             10% CUT
           </span>
         </div>
 
-        {refData?.referrals && refData.referrals.length > 0 ? (
+        {refData?.recruits && refData.recruits.length > 0 ? (
           <div className="flex flex-col gap-1.5 max-h-56 overflow-y-auto pr-1">
-            {refData.referrals.map((friend) => (
+            {refData.recruits.map((friend) => (
               <div
                 key={friend.id}
                 className="flex items-center justify-between p-2 bg-[#181a24] border border-[#282c3c] text-xs"
               >
                 <div>
-                  <span className="font-pixel text-[9px] text-white block">{friend.name}</span>
+                  <span className="font-pixel text-[9px] text-white block">
+                    {friend.username ? `@${friend.username}` : friend.first_name || "Warrior"}
+                  </span>
                   <span className="font-arcade text-xs text-slate-400">
-                    {friend.totalPixelsPlaced} PX PLACED ({friend.pointsEarned.toFixed(1)} PTS)
+                    {friend.total_pixels_placed || 0} PX PLACED ({(friend.airdrop_points || 0).toFixed(1)} PTS)
                   </span>
                 </div>
 
                 <div className="text-right">
                   <span className="font-arcade text-base font-bold text-[#a78bfa]">
-                    +{friend.bonusGivenToYou.toFixed(1)} PTS
+                    +{((friend.airdrop_points || 0) * 0.10).toFixed(1)} PTS
                   </span>
                   <span className="font-pixel text-[7px] text-slate-500 block">YOUR 10% CUT</span>
                 </div>

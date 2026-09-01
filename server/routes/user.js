@@ -34,6 +34,11 @@ userRouter.post("/auth", (req, res) => {
     const token = generateAuthToken(user.id);
     const refCount = db.prepare("SELECT COUNT(*) as count FROM users WHERE referrer_id = ?").get(user.id).count;
 
+    let completedTasks = [];
+    try {
+      completedTasks = JSON.parse(user.completed_tasks || "[]");
+    } catch (e) {}
+
     res.json({
       success: true,
       token,
@@ -42,6 +47,7 @@ userRouter.post("/auth", (req, res) => {
         username: user.username,
         firstName: user.first_name,
         walletAddress: user.wallet_address || null,
+        completedTasks,
         pixelBalance: user.pixel_balance,
         totalPixelsPlaced: user.total_pixels_placed,
         freshPixelsPlaced: user.fresh_pixels_placed,
@@ -86,6 +92,86 @@ userRouter.post("/save-wallet", requireAuth, (req, res) => {
   }
 });
 
+// Get List of Social Tasks and completion status (Protected)
+userRouter.get("/tasks", requireAuth, (req, res) => {
+  const userId = req.userId;
+  const user = db.prepare("SELECT completed_tasks FROM users WHERE id = ?").get(userId);
+
+  let completedTasks = [];
+  try {
+    completedTasks = JSON.parse(user?.completed_tasks || "[]");
+  } catch (e) {}
+
+  const tasksWithStatus = CONFIG.TASKS.map((t) => ({
+    ...t,
+    isCompleted: completedTasks.includes(t.id),
+  }));
+
+  res.json({
+    tasks: tasksWithStatus,
+    completedCount: completedTasks.length,
+    totalAvailable: CONFIG.TASKS.length,
+  });
+});
+
+// Complete a Task & Claim Pixel Reward (Protected)
+userRouter.post("/complete-task", requireAuth, (req, res) => {
+  const userId = req.userId;
+  const { taskId } = req.body;
+
+  const task = CONFIG.TASKS.find((t) => t.id === taskId);
+  if (!task) {
+    return res.status(400).json({ error: "Invalid task ID." });
+  }
+
+  const user = db.prepare("SELECT * FROM users WHERE id = ?").get(userId);
+  if (!user) {
+    return res.status(404).json({ error: "User not found." });
+  }
+
+  let completed = [];
+  try {
+    completed = JSON.parse(user.completed_tasks || "[]");
+  } catch (e) {}
+
+  if (completed.includes(taskId)) {
+    return res.status(400).json({ error: "You have already completed this task." });
+  }
+
+  completed.push(taskId);
+  const newBalance = user.pixel_balance + task.rewardPixels;
+
+  try {
+    db.transaction(() => {
+      db.prepare("UPDATE users SET pixel_balance = ?, completed_tasks = ? WHERE id = ?")
+        .run(newBalance, JSON.stringify(completed), userId);
+
+      db.prepare(`
+        INSERT INTO transactions (id, user_id, type, pixels_awarded, details, created_at)
+        VALUES (?, ?, 'TASK_REWARD', ?, ?, ?)
+      `).run(
+        `task_${taskId}_${Date.now()}`,
+        userId,
+        task.rewardPixels,
+        JSON.stringify({ taskId, taskTitle: task.title }),
+        Math.floor(Date.now() / 1000)
+      );
+    })();
+
+    console.log(`🎁 Task '${task.id}' claimed by user ${userId} (+${task.rewardPixels} PX)`);
+
+    res.json({
+      success: true,
+      taskId,
+      pixelsAdded: task.rewardPixels,
+      newBalance,
+      completedTasks: completed,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Fetch latest profile state
 userRouter.get("/profile/:id", (req, res) => {
   const userId = req.params.id;
@@ -95,12 +181,17 @@ userRouter.get("/profile/:id", (req, res) => {
   }
 
   const refCount = db.prepare("SELECT COUNT(*) as count FROM users WHERE referrer_id = ?").get(user.id).count;
+  let completedTasks = [];
+  try {
+    completedTasks = JSON.parse(user.completed_tasks || "[]");
+  } catch (e) {}
 
   res.json({
     id: user.id,
     username: user.username,
     firstName: user.first_name,
     walletAddress: user.wallet_address || null,
+    completedTasks,
     pixelBalance: user.pixel_balance,
     totalPixelsPlaced: user.total_pixels_placed,
     freshPixelsPlaced: user.fresh_pixels_placed,

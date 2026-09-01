@@ -7,6 +7,7 @@ import { PaletteBar } from "./components/canvas/PaletteBar.jsx";
 import { PendingTray } from "./components/canvas/PendingTray.jsx";
 import { PixelInspector } from "./components/canvas/PixelInspector.jsx";
 import { MiniMap } from "./components/canvas/MiniMap.jsx";
+import { TasksHub } from "./components/tasks/TasksHub.jsx";
 import { StarsShop } from "./components/store/StarsShop.jsx";
 import { AdsGramPlayer } from "./components/store/AdsGramPlayer.jsx";
 import { DailyClaim } from "./components/store/DailyClaim.jsx";
@@ -102,6 +103,12 @@ export function App() {
               <PendingTray onOpenStore={() => setActiveTab("store")} />
               <PaletteBar />
             </div>
+          </div>
+        )}
+
+        {activeTab === "tasks" && (
+          <div className="w-full h-full overflow-y-auto p-3.5 flex flex-col gap-3.5 max-w-lg mx-auto pb-10">
+            <TasksHub />
           </div>
         )}
 

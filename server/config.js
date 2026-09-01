@@ -4,6 +4,7 @@ dotenv.config();
 export const CONFIG = {
   PORT: process.env.PORT || 3001,
   BOT_TOKEN: process.env.BOT_TOKEN || "DEMO_BOT_TOKEN",
+  BOT_USERNAME: process.env.BOT_USERNAME || "Pixel_Warz_bot",
   WEBAPP_URL: process.env.WEBAPP_URL || "https://pixel-warz.vercel.app",
   NODE_ENV: process.env.NODE_ENV || "development",
   
@@ -44,6 +45,26 @@ export const CONFIG = {
     COOLDOWN_SECONDS: 30,
     DAILY_STREAK_REWARDS: [10, 10, 20, 20, 30, 30, 50], // D1:10, D2:10, D3:20, D4:20, D5:30, D6:30, D7:50
   },
+
+  // Social & Growth Earn Tasks
+  TASKS: [
+    {
+      id: "join_channel",
+      title: "Join Official Telegram Channel",
+      description: "Subscribe to our channel for announcements & giveaways",
+      url: "https://t.me/Pixel_Warz_Official",
+      rewardPixels: 20,
+      icon: "📢",
+    },
+    {
+      id: "join_community",
+      title: "Join Pixel Warriors Community",
+      description: "Join the official discussion group & coordinate canvas raids",
+      url: "https://t.me/+uDsoROYbP7kyZTI1",
+      rewardPixels: 20,
+      icon: "💬",
+    },
+  ],
 
   // 32-Color Palette (Hex Codes)
   PALETTE: [

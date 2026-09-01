@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
 import { api } from "../services/api.js";
 import { socket } from "../services/socket.js";
+import { sound } from "../services/sound.js";
 import { useTelegram } from "./TelegramContext.jsx";
 import { PALETTE } from "../utils/palette.js";
 
@@ -16,7 +17,7 @@ export function GameProvider({ children }) {
 
   // Tool & Palette State
   const [selectedColor, setSelectedColor] = useState(6); // Default Red
-  const [activeTool, setActiveTool] = useState("brush");
+  const [activeTool, setActiveTool] = useState("brush"); // "brush" | "bomb" | "inspect" | "pipette"
   const [pendingPixels, setPendingPixels] = useState(new Map());
 
   // Player & Economy State
@@ -83,6 +84,8 @@ export function GameProvider({ children }) {
         id: user?.id?.toString() || "guest_101",
         username: user?.username || "guest",
         firstName: user?.first_name || "Pixel Warrior",
+        walletAddress: null,
+        completedTasks: [],
         pixelBalance: 10,
         airdropPoints: 0,
         referralPoints: 0,
@@ -165,27 +168,56 @@ export function GameProvider({ children }) {
     return currentColor !== 0;
   }, []);
 
+  // Stage Pixel with 3x3 Bomb support
   const stagePixel = useCallback(
-    (x, y, colorIdx = selectedColor) => {
-      if (x < 0 || x >= 1000 || y < 0 || y >= 1000) return;
+    (centerX, centerY, colorIdx = selectedColor) => {
+      if (centerX < 0 || centerX >= 1000 || centerY < 0 || centerY >= 1000) return;
 
-      setPendingPixels((prev) => {
-        const next = new Map(prev);
-        const key = `${x}_${y}`;
-        const isRecolor = isPixelRecolor(x, y);
-
-        next.set(key, {
-          x,
-          y,
-          colorIndex: colorIdx,
-          isRecolor,
+      if (activeTool === "bomb") {
+        // Stage 3x3 Bomb (9 Pixels)
+        setPendingPixels((prev) => {
+          const next = new Map(prev);
+          for (let dx = -1; dx <= 1; dx++) {
+            for (let dy = -1; dy <= 1; dy++) {
+              const nx = centerX + dx;
+              const ny = centerY + dy;
+              if (nx >= 0 && nx < 1000 && ny >= 0 && ny < 1000) {
+                const key = `${nx}_${ny}`;
+                const isRecolor = isPixelRecolor(nx, ny);
+                next.set(key, {
+                  x: nx,
+                  y: ny,
+                  colorIndex: colorIdx,
+                  isRecolor,
+                });
+              }
+            }
+          }
+          sound.playBombBlast();
+          haptic.impact("heavy");
+          return next;
         });
+      } else {
+        // Stage Single Pixel
+        setPendingPixels((prev) => {
+          const next = new Map(prev);
+          const key = `${centerX}_${centerY}`;
+          const isRecolor = isPixelRecolor(centerX, centerY);
 
-        haptic.selection();
-        return next;
-      });
+          next.set(key, {
+            x: centerX,
+            y: centerY,
+            colorIndex: colorIdx,
+            isRecolor,
+          });
+
+          sound.playPlacePixel();
+          haptic.selection();
+          return next;
+        });
+      }
     },
-    [selectedColor, isPixelRecolor, haptic]
+    [selectedColor, activeTool, isPixelRecolor, haptic]
   );
 
   const unstagePixel = useCallback((x, y) => {
@@ -198,6 +230,7 @@ export function GameProvider({ children }) {
 
   const clearPendingPixels = useCallback(() => {
     setPendingPixels(new Map());
+    sound.playClick();
     haptic.impact("light");
   }, [haptic]);
 
@@ -225,13 +258,14 @@ export function GameProvider({ children }) {
     };
   })();
 
-  // 5. Submit Pixels to Server with Server-Side Database Verification
+  // 5. Submit Pixels to Server with Database Verification
   const submitPendingPixels = async () => {
     if (pendingPixels.size === 0) return;
     if (!player) return;
 
     if (player.pixelBalance < pendingPixels.size) {
       showToast(`Need ${pendingPixels.size - player.pixelBalance} more pixels!`, "error");
+      sound.playClick();
       haptic.notification("error");
       return;
     }
@@ -258,6 +292,7 @@ export function GameProvider({ children }) {
         setPendingPixels(new Map());
         setCanvasVersion((v) => v + 1);
 
+        sound.playClaimReward();
         haptic.notification("success");
         showToast(`🎉 Placed ${res.placedCount} Pixels! +${res.pointsAwarded.toFixed(1)} Pts`, "success");
         loadMilestones();
@@ -276,6 +311,7 @@ export function GameProvider({ children }) {
       const info = await api.getPixelInfo(x, y);
       setInspectedPixel(info);
       setIsInspectorOpen(true);
+      sound.playClick();
       haptic.impact("light");
     } catch (err) {
       const currentColor = canvasBufferRef.current[y * 1000 + x];
@@ -296,6 +332,7 @@ export function GameProvider({ children }) {
     const colorIdx = canvasBufferRef.current[y * 1000 + x];
     setSelectedColor(colorIdx);
     setActiveTool("brush");
+    sound.playClick();
     haptic.impact("medium");
     showToast(`🎨 Selected: ${PALETTE[colorIdx]?.name || "Color"}`, "info");
   };
