@@ -25,7 +25,7 @@ export function Header({ onOpenStore }) {
         <div>
           <div className="flex items-center gap-1.5">
             <h1 className="font-pixel text-xs text-white tracking-wider">
-              PIXEL WARS
+              PIXEL WARZ
             </h1>
             <span className="font-pixel text-[8px] bg-[#282c3c] text-[#f59e0b] px-1 py-0.2 border border-black">
               1M

@@ -33,7 +33,7 @@ export function App() {
           <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-[#10b981] border-2 border-black animate-ping" />
         </div>
         <div className="text-center">
-          <h2 className="font-pixel text-sm text-white tracking-widest uppercase">PIXEL WARS</h2>
+          <h2 className="font-pixel text-sm text-white tracking-widest uppercase">PIXEL WARZ</h2>
           <p className="font-arcade text-sm text-[#f59e0b] mt-1">LOADING 1,000,000 CANVAS GRID...</p>
         </div>
       </div>
@@ -71,7 +71,7 @@ export function App() {
           <div className="flex items-center gap-2">
             <Gift className="w-3.5 h-3.5 text-[#f59e0b]" />
             <span className="font-pixel text-[8px] text-[#fbbf24] uppercase">
-              🎁 10 FREE STARTER PIXELS READY! DRAW YOUR FIRST MARK
+              🎁 10 FREE STARTER PIXELS + 1 BOMB READY! DRAW YOUR FIRST MARK
             </span>
           </div>
           <button
@@ -101,7 +101,7 @@ export function App() {
             {/* Floating Controls at Bottom of Canvas */}
             <div className="relative z-10 mt-auto flex flex-col gap-2 pb-2">
               <PendingTray onOpenStore={() => setActiveTab("store")} />
-              <PaletteBar />
+              <PaletteBar onOpenStore={() => setActiveTab("store")} />
             </div>
           </div>
         )}

@@ -1,4 +1,4 @@
-import Database from "better-sqlite3";
+import Database from "libsql";
 import path from "path";
 import { fileURLToPath } from "url";
 import { CONFIG } from "../config.js";
@@ -7,14 +7,40 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const dbPath = path.join(__dirname, "pixel_game.db");
 
-export const db = new Database(dbPath);
+// Configure LibSQL with automatic Turso Cloud Sync if environment variables are provided
+const dbOptions = {};
+const tursoUrl = process.env.TURSO_DATABASE_URL || process.env.DATABASE_URL || process.env.TURSO_URL;
+const tursoToken = process.env.TURSO_AUTH_TOKEN || process.env.TURSO_TOKEN;
+
+if (tursoUrl && tursoToken) {
+  dbOptions.syncUrl = tursoUrl.trim();
+  dbOptions.authToken = tursoToken.trim();
+  dbOptions.syncInterval = 60000; // Auto sync with Turso cloud every 60s
+  console.log(" Connected to Turso Cloud LibSQL Database:", dbOptions.syncUrl);
+} else {
+  console.log(" Using Local SQLite/LibSQL storage at:", dbPath);
+}
+
+export const db = new Database(dbPath, dbOptions);
 
 // Enable WAL mode for high concurrency
-db.pragma("journal_mode = WAL");
-db.pragma("synchronous = NORMAL");
+try {
+  db.pragma("journal_mode = WAL");
+  db.pragma("synchronous = NORMAL");
+} catch (e) {}
 
 // Initialize Database Schema
 export function initDatabase() {
+  // If connected to Turso Cloud, perform immediate synchronization
+  if (dbOptions.syncUrl) {
+    try {
+      db.sync();
+      console.log(" Initial sync with Turso Cloud completed.");
+    } catch (syncErr) {
+      console.warn("⚠️ Initial Turso sync warning:", syncErr.message);
+    }
+  }
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
@@ -110,7 +136,6 @@ export function initDatabase() {
     const hasBombs = tableInfo.some((col) => col.name === "bomb_balance");
     if (!hasBombs) {
       db.exec("ALTER TABLE users ADD COLUMN bomb_balance INTEGER DEFAULT 1;");
-      console.log(" Added bomb_balance column to users table.");
     }
   } catch (e) {}
 
