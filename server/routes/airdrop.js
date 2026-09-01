@@ -4,6 +4,37 @@ import { db } from "../database/db.js";
 
 export const airdropRouter = express.Router();
 
+// Debug endpoint - shows what env vars Render sees (SAFE: only shows key names, not values)
+airdropRouter.get("/db-status", (req, res) => {
+  const tursoUrl = process.env.TURSO_DATABASE_URL || process.env.DATABASE_URL || process.env.TURSO_URL || "";
+  const tursoToken = process.env.TURSO_AUTH_TOKEN || process.env.TURSO_TOKEN || "";
+
+  // List all env var KEYS that contain turso/database/libsql (not values for security)
+  const relevantEnvKeys = Object.keys(process.env).filter(k =>
+    k.toLowerCase().includes("turso") ||
+    k.toLowerCase().includes("database") ||
+    k.toLowerCase().includes("libsql")
+  );
+
+  const isTursoConfigured = tursoUrl.startsWith("libsql://") && tursoToken.length > 0;
+
+  let userCount = 0;
+  let pixelCount = 0;
+  try {
+    userCount = db.prepare("SELECT COUNT(*) as c FROM users").get().c;
+    pixelCount = db.prepare("SELECT COUNT(*) as c FROM pixels").get().c;
+  } catch (e) {}
+
+  res.json({
+    tursoConfigured: isTursoConfigured,
+    tursoUrlPrefix: tursoUrl ? tursoUrl.slice(0, 30) + "..." : "NOT SET",
+    tokenSet: tursoToken.length > 0,
+    relevantEnvVarKeys: relevantEnvKeys,
+    dbStats: { userCount, pixelCount },
+    nodeEnv: process.env.NODE_ENV || "not set",
+  });
+});
+
 // Get Milestone Progress Stats (50 rounds up to 5 Billion pixels)
 airdropRouter.get("/milestones", (req, res) => {
   try {
