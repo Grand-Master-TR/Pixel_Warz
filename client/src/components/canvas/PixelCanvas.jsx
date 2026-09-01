@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import { useGame } from "../../context/GameContext.jsx";
 import { PALETTE, PALETTE_RGB } from "../../utils/palette.js";
-import { ZoomIn, ZoomOut, Maximize2, Compass } from "lucide-react";
+import { ZoomIn, ZoomOut, Maximize2, Compass, Bomb } from "lucide-react";
 
 export function PixelCanvas() {
   const {
@@ -108,11 +108,22 @@ export function PixelCanvas() {
         ctx.fillStyle = hex;
         ctx.fillRect(p.x, p.y, 1, 1);
 
-        // Highlight ring: Gold for recolor, Emerald for fresh
-        ctx.strokeStyle = p.isRecolor ? "#f59e0b" : "#10b981";
+        // Highlight ring: Crimson for bomb/recolor, Emerald for fresh
+        ctx.strokeStyle = activeTool === "bomb" ? "#ef4444" : p.isRecolor ? "#f59e0b" : "#10b981";
         ctx.lineWidth = 1.2 / viewport.zoom;
         ctx.strokeRect(p.x, p.y, 1, 1);
       }
+    }
+
+    // Draw 3x3 Bomb Target Crosshair if Bomb tool is active
+    if (activeTool === "bomb" && hoverCoords) {
+      const bx = Math.max(0, hoverCoords.x - 1);
+      const by = Math.max(0, hoverCoords.y - 1);
+      ctx.fillStyle = "rgba(239, 68, 68, 0.25)";
+      ctx.fillRect(bx, by, 3, 3);
+      ctx.strokeStyle = "#ef4444";
+      ctx.lineWidth = 1.5 / viewport.zoom;
+      ctx.strokeRect(bx, by, 3, 3);
     }
 
     // Draw Pixel Grid when zoomed in close (zoom >= 8)
@@ -143,7 +154,7 @@ export function PixelCanvas() {
     ctx.strokeRect(0, 0, 1000, 1000);
 
     ctx.restore();
-  }, [viewport, pendingPixels, canvasVersion]);
+  }, [viewport, pendingPixels, canvasVersion, activeTool, hoverCoords]);
 
   // Resize canvas to match container
   useEffect(() => {
@@ -163,7 +174,7 @@ export function PixelCanvas() {
 
   useEffect(() => {
     render();
-  }, [render, viewport, pendingPixels, canvasVersion]);
+  }, [render, viewport, pendingPixels, canvasVersion, activeTool, hoverCoords]);
 
   // Convert Screen Coordinates (px) to Canvas Pixel Coordinates (0-999)
   const screenToCanvasCoords = (clientX, clientY) => {
@@ -246,6 +257,9 @@ export function PixelCanvas() {
           } else {
             stagePixel(coords.x, coords.y, selectedColor);
           }
+        } else if (activeTool === "bomb") {
+          // 💣 Stage 3x3 Bomb (9 pixels centered on clicked coordinate)
+          stagePixel(coords.x, coords.y, selectedColor);
         } else if (activeTool === "inspect") {
           inspectCoordinates(coords.x, coords.y);
         } else if (activeTool === "pipette") {
@@ -313,12 +327,21 @@ export function PixelCanvas() {
 
       {/* Floating Retro HUD: Coordinates & Zoom Level */}
       <div className="absolute top-3 left-3 flex items-center gap-2 bg-[#12141c]/90 border-2 border-black px-2.5 py-1 text-xs font-arcade text-slate-300 z-10 shadow-pixel pointer-events-none">
-        <Compass className="w-3.5 h-3.5 text-[#f59e0b]" />
+        {activeTool === "bomb" ? (
+          <Bomb className="w-3.5 h-3.5 text-[#ef4444] animate-bounce" />
+        ) : (
+          <Compass className="w-3.5 h-3.5 text-[#f59e0b]" />
+        )}
         <span className="font-pixel text-[9px]">
           X:<strong className="text-[#fbbf24] ml-0.5">{hoverCoords.x}</strong> Y:<strong className="text-[#fbbf24] ml-0.5">{hoverCoords.y}</strong>
         </span>
         <span className="text-slate-600">|</span>
         <span className="font-arcade text-[#10b981] font-bold text-sm tracking-wider">{viewport.zoom.toFixed(1)}X</span>
+        {activeTool === "bomb" && (
+          <span className="font-pixel text-[8px] bg-[#2e1515] text-[#f87171] px-1.5 py-0.2 border border-[#991b1b]">
+            3x3 BLAST
+          </span>
+        )}
       </div>
 
       {/* Floating Retro Zoom Controls */}
