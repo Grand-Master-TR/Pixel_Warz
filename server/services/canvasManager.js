@@ -16,6 +16,9 @@ class CanvasManager {
     // In-memory 1M pixel buffer (color index per pixel)
     this.buffer = new Uint8Array(this.totalPixels);
     this.dirty = false;
+
+    // Prepared statement for fast pixel insertion (reused across all requests)
+    this.insertPixelStmt = null;
   }
 
   seedLogoIfMissing() {
@@ -60,6 +63,16 @@ class CanvasManager {
   init() {
     console.log("🎨 Initializing 1,000,000-pixel Canvas Buffer from database...");
     try {
+      this.insertPixelStmt = db.prepare(`
+        INSERT INTO pixels (pixel_index, x, y, color_index, last_placed_by, last_placed_at, recolor_count)
+        VALUES (?, ?, ?, ?, ?, ?, 1)
+        ON CONFLICT(pixel_index) DO UPDATE SET
+          color_index = excluded.color_index,
+          last_placed_by = excluded.last_placed_by,
+          last_placed_at = excluded.last_placed_at,
+          recolor_count = recolor_count + 1
+      `);
+
       // 1. Seed or re-seed complete logo if pixel count is incomplete
       const count = db.prepare("SELECT COUNT(*) as c FROM pixels WHERE last_placed_by = 'PIXEL_WARZ'").get()?.c || 0;
       if (count < 35000) {
@@ -132,29 +145,32 @@ class CanvasManager {
     return this.buffer[pixelIndex] !== 0;
   }
 
+  // Fast Zero-Latency In-Memory & Database Pixel Update
   applyPixel(userId, x, y, colorIndex, timestamp = Math.floor(Date.now() / 1000)) {
     const pixelIndex = y * this.width + x;
     const prevColor = this.buffer[pixelIndex];
-    const existing = db.prepare("SELECT recolor_count FROM pixels WHERE pixel_index = ?").get(pixelIndex);
-    const isRecolor = !!existing || prevColor !== 0;
-    const newRecolorCount = existing ? (existing.recolor_count + 1) : (prevColor !== 0 ? 1 : 0);
+    const isRecolor = prevColor !== 0;
 
-    // Update memory buffer immediately
+    // 1. Update in-memory buffer in 0 microseconds
     this.buffer[pixelIndex] = colorIndex;
     this.dirty = true;
 
-    // Write to database (this goes to Turso if configured)
-    db.prepare(`
-      INSERT INTO pixels (pixel_index, x, y, color_index, last_placed_by, last_placed_at, recolor_count)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(pixel_index) DO UPDATE SET
-        color_index = excluded.color_index,
-        last_placed_by = excluded.last_placed_by,
-        last_placed_at = excluded.last_placed_at,
-        recolor_count = excluded.recolor_count
-    `).run(pixelIndex, x, y, colorIndex, userId, timestamp, newRecolorCount);
+    // 2. High-speed database write (Atomic Upsert without blocking SELECT)
+    if (!this.insertPixelStmt) {
+      this.insertPixelStmt = db.prepare(`
+        INSERT INTO pixels (pixel_index, x, y, color_index, last_placed_by, last_placed_at, recolor_count)
+        VALUES (?, ?, ?, ?, ?, ?, 1)
+        ON CONFLICT(pixel_index) DO UPDATE SET
+          color_index = excluded.color_index,
+          last_placed_by = excluded.last_placed_by,
+          last_placed_at = excluded.last_placed_at,
+          recolor_count = recolor_count + 1
+      `);
+    }
 
-    return { x, y, pixelIndex, colorIndex, isRecolor, recolorCount: newRecolorCount, lastPlacedBy: userId, timestamp };
+    this.insertPixelStmt.run(pixelIndex, x, y, colorIndex, userId, timestamp);
+
+    return { x, y, pixelIndex, colorIndex, isRecolor, lastPlacedBy: userId, timestamp };
   }
 }
 

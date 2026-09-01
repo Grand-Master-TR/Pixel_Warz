@@ -259,7 +259,7 @@ export function GameProvider({ children }) {
     };
   })();
 
-  // 5. Submit Pixels / Bomb Detonation to Server
+  // 5. Submit Pixels / Bomb Detonation with INSTANT 0ms OPTIMISTIC UI RESPONSE
   const submitPendingPixels = async (useBomb = false) => {
     if (pendingPixels.size === 0) return;
     if (!player) return;
@@ -280,43 +280,70 @@ export function GameProvider({ children }) {
       }
     }
 
-    setIsSubmitting(true);
     const pixelArray = Array.from(pendingPixels.values());
+    const count = pixelArray.length;
+    const estPoints = pendingSummary.totalPoints;
+    const estFresh = pendingSummary.freshCount;
+    const estRecolor = pendingSummary.recolorCount;
 
+    // ⚡ 1. INSTANT 0ms OPTIMISTIC UI UPDATE: Paint directly to canvas buffer!
+    const previousBufferBackup = new Map();
+    for (const p of pixelArray) {
+      const idx = p.y * 1000 + p.x;
+      previousBufferBackup.set(idx, canvasBufferRef.current[idx]);
+      canvasBufferRef.current[idx] = p.colorIndex;
+    }
+
+    // Immediately clear pending tray & re-render canvas in 0.00ms
+    setPendingPixels(new Map());
+    setCanvasVersion((v) => v + 1);
+
+    // Immediately deduct balance & award points in UI
+    setPlayer((prev) => ({
+      ...prev,
+      pixelBalance: useBomb ? prev.pixelBalance : Math.max(0, prev.pixelBalance - count),
+      bombBalance: useBomb ? Math.max(0, (prev.bombBalance || 1) - 1) : prev.bombBalance,
+      airdropPoints: (prev.airdropPoints || 0) + estPoints,
+      totalPixelsPlaced: (prev.totalPixelsPlaced || 0) + count,
+      freshPixelsPlaced: (prev.freshPixelsPlaced || 0) + estFresh,
+      recoloredPixelsPlaced: (prev.recoloredPixelsPlaced || 0) + estRecolor,
+    }));
+
+    // Play immediate audio & haptic feedback
+    if (useBomb) {
+      sound.playBombBlast();
+      showToast(`💣 DETONATED 3x3 BOMB! +${estPoints.toFixed(1)} Pts`, "success");
+      haptic.impact("heavy");
+    } else {
+      sound.playClaimReward();
+      showToast(`🎉 Placed ${count} Pixels! +${estPoints.toFixed(1)} Pts`, "success");
+      haptic.notification("success");
+    }
+
+    setIsSubmitting(true);
+
+    // 🌐 2. Background Network Sync to Server
     try {
       const res = await api.placePixels(player.id, pixelArray, useBomb);
       if (res?.success) {
-        for (const p of res.appliedPixels) {
-          canvasBufferRef.current[p.y * 1000 + p.x] = p.colorIndex;
-        }
-
+        // Reconcile official server state
         setPlayer((prev) => ({
           ...prev,
           pixelBalance: res.newBalance,
           bombBalance: res.newBombBalance ?? prev.bombBalance,
           airdropPoints: res.newTotalPoints,
-          totalPixelsPlaced: prev.totalPixelsPlaced + res.placedCount,
-          freshPixelsPlaced: prev.freshPixelsPlaced + res.freshCount,
-          recoloredPixelsPlaced: prev.recoloredPixelsPlaced + res.recolorCount,
         }));
-
-        setPendingPixels(new Map());
-        setCanvasVersion((v) => v + 1);
-
-        if (useBomb) {
-          sound.playBombBlast();
-          showToast(`💣 DETONATED 3x3 BOMB! +${res.pointsAwarded.toFixed(1)} Pts`, "success");
-        } else {
-          sound.playClaimReward();
-          showToast(`🎉 Placed ${res.placedCount} Pixels! +${res.pointsAwarded.toFixed(1)} Pts`, "success");
-        }
-
-        haptic.notification("success");
         loadMilestones();
       }
     } catch (err) {
       console.error("Placement error on server:", err);
-      showToast(err.message || "Failed to place pixels on server", "error");
+      // Rollback on server error
+      for (const [idx, oldColor] of previousBufferBackup.entries()) {
+        canvasBufferRef.current[idx] = oldColor;
+      }
+      setCanvasVersion((v) => v + 1);
+      refreshProfile();
+      showToast(err.message || "Placement error, rolling back.", "error");
       haptic.notification("error");
     } finally {
       setIsSubmitting(false);
