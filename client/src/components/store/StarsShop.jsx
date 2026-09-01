@@ -5,16 +5,17 @@ import { api } from "../../services/api.js";
 import { Star, ShieldCheck, Sparkles } from "lucide-react";
 
 export function StarsShop() {
-  const { player, setPlayer, showToast } = useGame();
+  const { player, setPlayer, showToast, refreshProfile } = useGame();
   const { isTelegram, openInvoice, haptic } = useTelegram();
   const [purchasingId, setPurchasingId] = useState(null);
 
+  // 10x Pixels for Stars Packages
   const packages = [
-    { id: "stars_1", stars: 1, pixels: 10, bonus: null, label: "Starter Pixel Pouch", icon: "🪙" },
-    { id: "stars_10", stars: 10, pixels: 100, bonus: null, label: "Colorist Box", icon: "🎨", popular: true },
-    { id: "stars_50", stars: 50, pixels: 550, bonus: "+10% EXTRA", label: "Painter Bundle", icon: "⚡" },
-    { id: "stars_100", stars: 100, pixels: 1200, bonus: "+20% EXTRA", label: "Master Canvas Chest", icon: "💎" },
-    { id: "stars_500", stars: 500, pixels: 6500, bonus: "+30% EXTRA", label: "Warlord Treasury", icon: "👑", bestValue: true },
+    { id: "stars_1", stars: 1, pixels: 100, bonus: null, label: "Starter Pixel Pouch", icon: "🪙" },
+    { id: "stars_10", stars: 10, pixels: 1000, bonus: null, label: "Colorist Box", icon: "🎨", popular: true },
+    { id: "stars_50", stars: 50, pixels: 5500, bonus: "+10% EXTRA", label: "Painter Bundle", icon: "⚡" },
+    { id: "stars_100", stars: 100, pixels: 12000, bonus: "+20% EXTRA", label: "Master Canvas Chest", icon: "💎" },
+    { id: "stars_500", stars: 500, pixels: 65000, bonus: "+30% EXTRA", label: "Warlord Treasury", icon: "👑", bestValue: true },
   ];
 
   const handlePurchase = async (pkg) => {
@@ -23,32 +24,37 @@ export function StarsShop() {
     haptic.impact("medium");
 
     try {
-      if (isTelegram) {
-        const invRes = await api.createStarsInvoice(player.id, pkg.id);
-        if (invRes.invoiceLink) {
+      // Step 1: Create official Telegram Stars Invoice Link on server
+      const invRes = await api.createStarsInvoice(player.id, pkg.id);
+
+      if (invRes.invoiceLink) {
+        if (isTelegram && !invRes.isSimulation) {
+          // Step 2: Open Native Telegram Stars Checkout Sheet
           openInvoice(invRes.invoiceLink, async (status) => {
             if (status === "paid") {
-              const profile = await api.getProfile(player.id);
-              setPlayer(profile);
-              showToast(`🎉 Purchased +${pkg.pixels} Pixels!`, "success");
+              await refreshProfile();
+              showToast(`🎉 Purchased +${pkg.pixels.toLocaleString()} Pixels!`, "success");
               haptic.notification("success");
+            } else if (status === "failed") {
+              showToast("Payment failed or was cancelled.", "error");
             }
           });
-        }
-      } else {
-        const simRes = await api.simulateStarsPurchase(player.id, pkg.id);
-        if (simRes.success) {
-          setPlayer((prev) => ({
-            ...prev,
-            pixelBalance: simRes.newBalance,
-          }));
-          showToast(`⭐ Added +${pkg.pixels} Pixels!`, "success");
-          haptic.notification("success");
+        } else {
+          // Dev / Browser Sandbox Simulation
+          const simRes = await api.simulateStarsPurchase(player.id, pkg.id);
+          if (simRes.success) {
+            setPlayer((prev) => ({
+              ...prev,
+              pixelBalance: simRes.newBalance,
+            }));
+            showToast(`⭐ Credited +${pkg.pixels.toLocaleString()} Pixels!`, "success");
+            haptic.notification("success");
+          }
         }
       }
     } catch (err) {
       console.error("Purchase error:", err);
-      showToast(err.message || "Purchase failed", "error");
+      showToast(err.message || "Could not open Stars checkout", "error");
       haptic.notification("error");
     } finally {
       setPurchasingId(null);
@@ -64,7 +70,7 @@ export function StarsShop() {
             <Star className="w-3.5 h-3.5 fill-[#f59e0b]" />
             <span>STARS PIXEL SHOP</span>
           </h3>
-          <p className="font-arcade text-xs text-slate-400 mt-0.5">1 TELEGRAM STAR = 10 PIXELS + BONUS</p>
+          <p className="font-arcade text-xs text-slate-400 mt-0.5">1 TELEGRAM STAR = 100 PIXELS + BONUS</p>
         </div>
         <div className="flex items-center gap-1 font-pixel text-[8px] text-[#10b981] bg-[#0f241a] px-2 py-1 border border-[#047857]">
           <ShieldCheck className="w-3 h-3" />
@@ -102,7 +108,7 @@ export function StarsShop() {
                 <div className="text-2xl">{pkg.icon}</div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-pixel text-xs text-white">{pkg.pixels} PIXELS</span>
+                    <span className="font-pixel text-xs text-white">{pkg.pixels.toLocaleString()} PIXELS</span>
                     {pkg.bonus && (
                       <span className="font-pixel text-[7px] text-[#10b981] bg-[#0f241a] px-1 py-0.2 border border-[#047857]">
                         {pkg.bonus}

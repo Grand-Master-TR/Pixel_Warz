@@ -63,13 +63,13 @@ export function App() {
       {/* Top Header */}
       <Header onOpenStore={() => setActiveTab("store")} />
 
-      {/* 1 Free Starter Pixel Banner */}
+      {/* 10 Free Starter Pixels Banner */}
       {showStarterBanner && player && player.totalPixelsPlaced === 0 && (
         <div className="bg-[#181a24] border-b-2 border-[#282c3c] px-3 py-1.5 flex items-center justify-between z-10">
           <div className="flex items-center gap-2">
             <Gift className="w-3.5 h-3.5 text-[#f59e0b]" />
             <span className="font-pixel text-[8px] text-[#fbbf24] uppercase">
-              🎁 1 FREE STARTER PIXEL READY! DRAW YOUR FIRST MARK
+              🎁 10 FREE STARTER PIXELS READY! DRAW YOUR FIRST MARK
             </span>
           </div>
           <button

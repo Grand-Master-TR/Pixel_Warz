@@ -36,7 +36,7 @@ export function MilestoneProgress() {
             <h3 className="font-pixel text-xs text-white uppercase">
               ROUND {activeRoundNumber} OF {maxRounds}
             </h3>
-            <p className="font-arcade text-xs text-slate-400">500M PIXELS GLOBAL AIRDROP POOL</p>
+            <p className="font-arcade text-xs text-slate-400">5 BILLION PIXELS GLOBAL AIRDROP POOL</p>
           </div>
         </div>
 
@@ -77,7 +77,7 @@ export function MilestoneProgress() {
       {showAllRounds && (
         <div className="flex flex-col gap-1.5 max-h-56 overflow-y-auto pr-1">
           <span className="font-pixel text-[8px] text-slate-400 uppercase tracking-wider">
-            ALL 50 AIRDROP MILESTONES
+            ALL 50 AIRDROP MILESTONES (5B PIXELS)
           </span>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
             {allRounds?.map((r) => {

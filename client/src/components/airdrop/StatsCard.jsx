@@ -33,7 +33,7 @@ export function StatsCard() {
           <span className="font-arcade text-2xl font-bold text-[#34d399] tracking-wider">
             {player.freshPixelsPlaced || 0}
           </span>
-          <span className="font-pixel text-[7px] text-emerald-400 block mt-0.5">+1.0 PT EACH</span>
+          <span className="font-pixel text-[7px] text-emerald-400 block mt-0.5">+10.0 PTS EACH</span>
         </div>
       </div>
 
@@ -47,7 +47,7 @@ export function StatsCard() {
           <span className="font-arcade text-2xl font-bold text-[#f87171] tracking-wider">
             {player.recoloredPixelsPlaced || 0}
           </span>
-          <span className="font-pixel text-[7px] text-rose-400 block mt-0.5">+1.5 PTS (50% BONUS)</span>
+          <span className="font-pixel text-[7px] text-rose-400 block mt-0.5">+15.0 PTS (50% BONUS)</span>
         </div>
       </div>
 

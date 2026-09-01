@@ -30,12 +30,12 @@ export function PendingTray({ onOpenStore }) {
             <div className="flex items-center gap-1.5 font-arcade text-xs">
               {pendingSummary.freshCount > 0 && (
                 <span className="bg-[#0f241a] text-[#34d399] px-1.5 py-0.2 border border-[#047857]">
-                  {pendingSummary.freshCount} Fresh (+{(pendingSummary.freshCount * 1.0).toFixed(1)} pts)
+                  {pendingSummary.freshCount} Fresh (+{(pendingSummary.freshCount * 10.0).toFixed(1)} pts)
                 </span>
               )}
               {pendingSummary.recolorCount > 0 && (
                 <span className="bg-[#2e1515] text-[#f87171] px-1.5 py-0.2 border border-[#991b1b] font-bold">
-                  🔥 {pendingSummary.recolorCount} Recolor (+{(pendingSummary.recolorCount * 1.5).toFixed(1)} pts)
+                  🔥 {pendingSummary.recolorCount} Recolor (+{(pendingSummary.recolorCount * 15.0).toFixed(1)} pts)
                 </span>
               )}
             </div>

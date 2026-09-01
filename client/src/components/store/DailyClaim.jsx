@@ -14,19 +14,19 @@ export function DailyClaim() {
   const now = Math.floor(Date.now() / 1000);
   const isClaimable = now - lastClaim >= 72000 || lastClaim === 0;
 
-  // Reduced tight daily streak rewards: Day 1-7 (1, 1, 2, 2, 3, 3, 5 pixels)
+  // 10x Daily Streak Rewards: Day 1-7 (10, 10, 20, 20, 30, 30, 50 pixels)
   const streakDays = [
-    { day: 1, pixels: 1 },
-    { day: 2, pixels: 1 },
-    { day: 3, pixels: 2 },
-    { day: 4, pixels: 2 },
-    { day: 5, pixels: 3 },
-    { day: 6, pixels: 3 },
-    { day: 7, pixels: 5 },
+    { day: 1, pixels: 10 },
+    { day: 2, pixels: 10 },
+    { day: 3, pixels: 20 },
+    { day: 4, pixels: 20 },
+    { day: 5, pixels: 30 },
+    { day: 6, pixels: 30 },
+    { day: 7, pixels: 50 },
   ];
 
   const currentDayIndex = streak % 7;
-  const nextRewardPixels = streakDays[currentDayIndex]?.pixels || 1;
+  const nextRewardPixels = streakDays[currentDayIndex]?.pixels || 10;
 
   const handleClaim = async () => {
     if (!player || !isClaimable || isClaiming) return;
@@ -43,7 +43,7 @@ export function DailyClaim() {
           dailyStreak: res.streakDay,
           lastDailyClaim: Math.floor(Date.now() / 1000),
         }));
-        showToast(`🎁 Claimed Day ${res.streakDay} Bonus: +${res.pixelsAdded} Pixel${res.pixelsAdded > 1 ? "s" : ""}!`, "success");
+        showToast(`🎁 Claimed Day ${res.streakDay} Bonus: +${res.pixelsAdded} Pixels!`, "success");
         haptic.notification("success");
       }
     } catch (err) {

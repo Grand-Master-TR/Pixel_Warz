@@ -43,7 +43,7 @@ export function AdsGramPlayer() {
             pixelBalance: rewardRes.newBalance,
             lastAdWatch: Math.floor(Date.now() / 1000),
           }));
-          showToast("📺 Ad Completed! +1 Free Pixel", "success");
+          showToast(`📺 Ad Completed! +${rewardRes.pixelsAdded || 10} Free Pixels`, "success");
           haptic.notification("success");
         }
       } else {
@@ -74,7 +74,7 @@ export function AdsGramPlayer() {
                 FREE
               </span>
             </div>
-            <p className="font-arcade text-xs text-slate-400">WATCH 1 AD → EARN +1 FREE PIXEL</p>
+            <p className="font-arcade text-xs text-slate-400">WATCH 1 AD → EARN +10 FREE PIXELS</p>
           </div>
         </div>
 
@@ -100,7 +100,7 @@ export function AdsGramPlayer() {
           ) : (
             <>
               <Play className="w-3 h-3 fill-white" />
-              <span>WATCH (+1 PX)</span>
+              <span>WATCH (+10 PX)</span>
             </>
           )}
         </button>

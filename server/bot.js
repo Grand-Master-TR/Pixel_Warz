@@ -3,6 +3,52 @@ import { CONFIG } from "./config.js";
 import { storeEngine } from "./services/storeEngine.js";
 import { getOrCreateUser } from "./services/auth.js";
 
+let botInstance = null;
+
+export function getBot() {
+  if (!botInstance && CONFIG.BOT_TOKEN && CONFIG.BOT_TOKEN !== "DEMO_BOT_TOKEN") {
+    botInstance = new Bot(CONFIG.BOT_TOKEN.trim());
+  }
+  return botInstance;
+}
+
+// Generate an official Telegram Stars (XTR) invoice link for the Mini App
+export async function createStarsInvoiceLink(userId, packageId) {
+  const pkg = CONFIG.STARS_PACKAGES.find((p) => p.id === packageId);
+  if (!pkg) throw new Error("Invalid package ID");
+
+  const bot = getBot();
+  if (!bot) {
+    // Sandbox / Local fallback invoice link
+    return {
+      invoiceLink: `https://t.me/demo_pixel_wars_bot?start=invoice_${packageId}_${userId}`,
+      isSimulation: true,
+      package: pkg
+    };
+  }
+
+  try {
+    const payload = `${packageId}_${userId}_${Date.now()}`;
+    const invoiceLink = await bot.api.createInvoiceLink(
+      `💎 ${pkg.pixels} Pixel Wars Pixels`,
+      `Get ${pkg.pixels} pixels instantly in Pixel Wars to conquer territory and earn airdrop points!`,
+      payload,
+      "", // Provider token is empty string for Telegram Stars (XTR)
+      "XTR", // Currency is strictly XTR for Telegram Stars
+      [{ label: `${pkg.pixels} Pixels`, amount: pkg.stars }]
+    );
+
+    return {
+      invoiceLink,
+      isSimulation: false,
+      package: pkg
+    };
+  } catch (err) {
+    console.error("Error creating Stars invoice link:", err);
+    throw new Error(`Failed to create Stars invoice: ${err.message}`);
+  }
+}
+
 export function initTelegramBot() {
   if (
     !CONFIG.BOT_TOKEN ||
@@ -13,7 +59,7 @@ export function initTelegramBot() {
     return null;
   }
 
-  const bot = new Bot(CONFIG.BOT_TOKEN);
+  const bot = getBot();
 
   // Command: /start [ref_12345]
   bot.command("start", async (ctx) => {
@@ -34,13 +80,13 @@ export function initTelegramBot() {
 
     await ctx.reply(
       `👾 **WELCOME TO PIXEL WARS!** 🎨\n\n` +
-      `🔥 1 Million Real-time Canvas. Place pixels, conquer territory, and claim your share of the **50-Round Milestone Airdrop**!\n\n` +
-      `🎁 **Your Free Starter Gift:** 1 Free Pixel is ready in your inventory to make your first mark!\n` +
-      `🎯 **Rewards:**\n` +
-      `• Fresh Pixel: +1.0 Airdrop Point\n` +
-      `• Overwrite/Recolor: +1.5 Airdrop Points (50% bonus!)\n` +
+      `🔥 1 Million Real-time Canvas. Place pixels, conquer territory, and claim your share of the **50-Round (5 Billion Pixels) Milestone Airdrop**!\n\n` +
+      `🎁 **Your Free Starter Gift:** 10 Free Pixels are ready in your inventory to make your first mark!\n` +
+      `🎯 **10x Rewards:**\n` +
+      `• Fresh Pixel: +10.0 Airdrop Points\n` +
+      `• Overwrite/Recolor: +15.0 Airdrop Points (50% bonus!)\n` +
       `• Referrals: Earn 10% of all points your friends accumulate forever!\n\n` +
-      `⭐ Get more pixels with Telegram Stars (1 Star = 10 Pixels) or watch quick ads to keep painting!\n\n` +
+      `⭐ Get more pixels with Telegram Stars (1 Star = 100 Pixels) or watch quick ads (+10 Pixels each) to keep painting!\n\n` +
       `Tap below to enter the canvas! 👇`,
       {
         parse_mode: "Markdown",
@@ -49,7 +95,7 @@ export function initTelegramBot() {
     );
   });
 
-  // Handle Telegram Stars Pre-Checkout Query
+  // Handle Telegram Stars Pre-Checkout Query (Always approve for Stars)
   bot.on("pre_checkout_query", async (ctx) => {
     try {
       await ctx.answerPreCheckoutQuery(true);
@@ -65,7 +111,7 @@ export function initTelegramBot() {
     const payload = payment.invoice_payload;
     const userId = ctx.from.id.toString();
 
-    console.log(` Telegram Stars payment received: ${payment.total_amount} XTR from user ${userId}`);
+    console.log(`⭐ Telegram Stars payment received: ${payment.total_amount} XTR from user ${userId}`);
 
     try {
       const parts = payload.split("_");

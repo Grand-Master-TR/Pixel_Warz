@@ -1,5 +1,6 @@
 import express from "express";
 import { storeEngine } from "../services/storeEngine.js";
+import { createStarsInvoiceLink } from "../bot.js";
 import { requireAuth } from "../services/auth.js";
 import { CONFIG } from "../config.js";
 
@@ -41,28 +42,24 @@ storeRouter.post("/claim-daily", requireAuth, (req, res) => {
   }
 });
 
-// Create Telegram Stars invoice link
+// Create Telegram Stars invoice link (Protected with requireAuth)
 storeRouter.post("/create-invoice", requireAuth, async (req, res) => {
   const userId = req.userId;
   const { packageId } = req.body;
-  const pkg = CONFIG.STARS_PACKAGES.find((p) => p.id === packageId);
-  if (!pkg) {
-    return res.status(400).json({ error: "Invalid package ID." });
+
+  if (!packageId) {
+    return res.status(400).json({ error: "packageId is required." });
   }
 
   try {
-    const invoiceLink = `https://t.me/pixel_wars_bot?start=invoice_${packageId}_${userId}`;
-    res.json({
-      invoiceLink,
-      package: pkg,
-      isSimulation: CONFIG.BOT_TOKEN === "DEMO_BOT_TOKEN"
-    });
+    const invoiceData = await createStarsInvoiceLink(userId, packageId);
+    res.json(invoiceData);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Simulate Stars purchase (LOCKED strictly in production)
+// Simulate Stars purchase (Sandbox/dev only)
 storeRouter.post("/simulate-stars-purchase", requireAuth, (req, res) => {
   if (CONFIG.NODE_ENV === "production" && CONFIG.BOT_TOKEN !== "DEMO_BOT_TOKEN") {
     return res.status(403).json({ error: "Simulated purchases are strictly disabled in production." });

@@ -29,19 +29,19 @@ export function GameProvider({ children }) {
   const [inspectedPixel, setInspectedPixel] = useState(null);
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
 
-  // Active Milestone Data
+  // Active Milestone Data (10x: 50 Rounds, 100M each up to 5B Pixels)
   const [milestones, setMilestones] = useState({
     globalPixelsPlaced: 0,
     maxRounds: 50,
-    maxTotalPixels: 500000000,
+    maxTotalPixels: 5000000000,
     activeRoundNumber: 1,
-    activeRoundTarget: 10000000,
+    activeRoundTarget: 100000000,
     roundProgressPixels: 0,
-    roundTargetPixels: 10000000,
+    roundTargetPixels: 100000000,
     progressPercent: 0,
     allRounds: Array.from({ length: 50 }, (_, i) => ({
       round_number: i + 1,
-      target_pixels: (i + 1) * 10000000,
+      target_pixels: (i + 1) * 100000000,
       status: i === 0 ? "ACTIVE" : "LOCKED"
     }))
   });
@@ -79,13 +79,11 @@ export function GameProvider({ children }) {
       }
     } catch (err) {
       console.error("Auth error:", err.message);
-      showToast("Connecting to game server...", "info");
-      // Fallback object while server wakes up
       setPlayer({
         id: user?.id?.toString() || "guest_101",
         username: user?.username || "guest",
         firstName: user?.first_name || "Pixel Warrior",
-        pixelBalance: 1,
+        pixelBalance: 10,
         airdropPoints: 0,
         referralPoints: 0,
         totalPixelsPlaced: 0,
@@ -203,6 +201,7 @@ export function GameProvider({ children }) {
     haptic.impact("light");
   }, [haptic]);
 
+  // 10x Points Calculation: Fresh = +10.0, Recolor = +15.0
   const pendingSummary = (() => {
     let freshCount = 0;
     let recolorCount = 0;
@@ -211,10 +210,10 @@ export function GameProvider({ children }) {
     for (const p of pendingPixels.values()) {
       if (p.isRecolor) {
         recolorCount++;
-        totalPoints += 1.5;
+        totalPoints += 15.0;
       } else {
         freshCount++;
-        totalPoints += 1.0;
+        totalPoints += 10.0;
       }
     }
 
@@ -243,12 +242,10 @@ export function GameProvider({ children }) {
     try {
       const res = await api.placePixels(player.id, pixelArray);
       if (res?.success) {
-        // Apply confirmed pixels to in-memory buffer
         for (const p of res.appliedPixels) {
           canvasBufferRef.current[p.y * 1000 + p.x] = p.colorIndex;
         }
 
-        // Update player state with authoritative server data
         setPlayer((prev) => ({
           ...prev,
           pixelBalance: res.newBalance,
