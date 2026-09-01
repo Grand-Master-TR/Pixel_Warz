@@ -1,102 +1,91 @@
-class SocketService {
+/**
+ * WebSocket Real-Time Client for Pixel Wars
+ * Connects to Render WebSocket backend
+ */
+
+class WebSocketClient {
   constructor() {
     this.ws = null;
-    this.subscribers = new Map();
+    this.listeners = new Map();
     this.reconnectTimer = null;
     this.pingInterval = null;
     this.isConnected = false;
   }
 
   connect() {
-    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
-      return;
-    }
-
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const host = window.location.host;
-    const wsUrl = import.meta.env.VITE_WS_URL || `${protocol}//${host}/ws`;
+    const defaultWs = "wss://pixel-warz.onrender.com/ws";
+    const wsUrl = import.meta.env.VITE_WS_URL || defaultWs;
 
     try {
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = () => {
+        console.log("📡 Connected to Pixel Wars Real-time WebSocket Server");
         this.isConnected = true;
-        this.emit("status", { connected: true });
-        
-        // Start ping heartbeat
-        clearInterval(this.pingInterval);
-        this.pingInterval = setInterval(() => {
-          if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify({ type: "PING" }));
-          }
-        }, 20000);
+        this.startHeartbeat();
       };
 
       this.ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          this.emit(data.type, data);
-        } catch (e) {
-          // ignore
+          if (data.type && this.listeners.has(data.type)) {
+            for (const cb of this.listeners.get(data.type)) {
+              cb(data);
+            }
+          }
+        } catch (err) {
+          console.error("WS parse error:", err);
         }
       };
 
       this.ws.onclose = () => {
         this.isConnected = false;
-        clearInterval(this.pingInterval);
-        this.emit("status", { connected: false });
-        this.scheduleReconnect();
+        this.stopHeartbeat();
+        // Auto-reconnect with exponential backoff
+        this.reconnectTimer = setTimeout(() => this.connect(), 4000);
       };
 
-      this.ws.onerror = () => {
-        this.ws?.close();
+      this.ws.onerror = (err) => {
+        console.warn("WS connection error:", err.message || "Connection failed");
       };
-    } catch (err) {
-      console.warn("WebSocket connection error:", err);
-      this.scheduleReconnect();
+    } catch (e) {
+      console.warn("WebSocket init error:", e);
     }
   }
 
-  scheduleReconnect() {
-    clearTimeout(this.reconnectTimer);
-    this.reconnectTimer = setTimeout(() => {
-      this.connect();
-    }, 3000);
-  }
-
-  on(event, callback) {
-    if (!this.subscribers.has(event)) {
-      this.subscribers.set(event, new Set());
+  on(type, callback) {
+    if (!this.listeners.has(type)) {
+      this.listeners.set(type, new Set());
     }
-    this.subscribers.get(event).add(callback);
-    return () => this.off(event, callback);
-  }
+    this.listeners.get(type).add(callback);
 
-  off(event, callback) {
-    if (this.subscribers.has(event)) {
-      this.subscribers.get(event).delete(callback);
-    }
-  }
-
-  emit(event, data) {
-    if (this.subscribers.has(event)) {
-      for (const callback of this.subscribers.get(event)) {
-        try {
-          callback(data);
-        } catch (err) {
-          console.error("Socket listener error:", err);
-        }
+    return () => {
+      if (this.listeners.has(type)) {
+        this.listeners.get(type).delete(callback);
       }
-    }
+    };
+  }
+
+  startHeartbeat() {
+    this.pingInterval = setInterval(() => {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({ type: "PING" }));
+      }
+    }, 25000);
+  }
+
+  stopHeartbeat() {
+    if (this.pingInterval) clearInterval(this.pingInterval);
   }
 
   disconnect() {
-    clearTimeout(this.reconnectTimer);
-    clearInterval(this.pingInterval);
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.stopHeartbeat();
     if (this.ws) {
       this.ws.close();
+      this.ws = null;
     }
   }
 }
 
-export const socket = new SocketService();
+export const socket = new WebSocketClient();

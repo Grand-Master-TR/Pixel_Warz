@@ -9,8 +9,8 @@ const GameContext = createContext(null);
 export function GameProvider({ children }) {
   const { user, initData, startParam, haptic } = useTelegram();
 
-  // Canvas State
-  const canvasBufferRef = useRef(new Uint8Array(1000000)); // 1000x1000
+  // Canvas State (1000 x 1000 = 1,000,000 pixels)
+  const canvasBufferRef = useRef(new Uint8Array(1000000));
   const [canvasReady, setCanvasReady] = useState(false);
   const [canvasVersion, setCanvasVersion] = useState(0);
 
@@ -20,19 +20,7 @@ export function GameProvider({ children }) {
   const [pendingPixels, setPendingPixels] = useState(new Map());
 
   // Player & Economy State
-  const [player, setPlayer] = useState({
-    id: "guest_user",
-    username: "pixel_guest",
-    firstName: "Pixel Warrior",
-    pixelBalance: 1,
-    airdropPoints: 0,
-    referralPoints: 0,
-    totalPixelsPlaced: 0,
-    freshPixelsPlaced: 0,
-    recoloredPixelsPlaced: 0,
-    dailyStreak: 0,
-    referralCount: 0,
-  });
+  const [player, setPlayer] = useState(null);
   const [onlineCount, setOnlineCount] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -68,10 +56,8 @@ export function GameProvider({ children }) {
     }, 3500);
   };
 
-  // 1. Authenticate & initialize user
+  // 1. Authenticate & initialize user from Backend Server
   const initUser = useCallback(async () => {
-    if (!user) return;
-
     let refId = null;
     if (startParam && startParam.startsWith("ref_")) {
       refId = startParam.replace("ref_", "");
@@ -81,37 +67,47 @@ export function GameProvider({ children }) {
 
     try {
       const authRes = await api.authUser({
-        initData,
-        devUserId: user.id?.toString(),
-        devUsername: user.username,
+        initData: initData || "",
+        devUserId: user?.id?.toString() || "dev_user",
+        devUsername: user?.username || "dev_warrior",
         referrerId: refId,
       });
 
       if (authRes?.success && authRes?.user) {
         setPlayer(authRes.user);
+        console.log("✅ Authenticated on server:", authRes.user);
       }
     } catch (err) {
-      console.warn("Backend connecting / Standalone mode:", err.message);
-      setPlayer((prev) => ({
-        ...prev,
-        id: user.id?.toString() || "player_1",
-        username: user.username || "warrior",
-        firstName: user.first_name || "Pixel Warrior",
+      console.error("Auth error:", err.message);
+      showToast("Connecting to game server...", "info");
+      // Fallback object while server wakes up
+      setPlayer({
+        id: user?.id?.toString() || "guest_101",
+        username: user?.username || "guest",
+        firstName: user?.first_name || "Pixel Warrior",
         pixelBalance: 1,
-      }));
+        airdropPoints: 0,
+        referralPoints: 0,
+        totalPixelsPlaced: 0,
+        freshPixelsPlaced: 0,
+        recoloredPixelsPlaced: 0,
+        dailyStreak: 0,
+        referralCount: 0,
+      });
     }
   }, [user, initData, startParam]);
 
-  // 2. Load initial 1MB Canvas Binary Data
+  // 2. Load initial 1MB Canvas Binary Data from Server
   const loadCanvasData = useCallback(async () => {
     try {
       const arrayBuffer = await api.getCanvasBinary();
       if (arrayBuffer && arrayBuffer.byteLength === 1000000) {
         const bytes = new Uint8Array(arrayBuffer);
         canvasBufferRef.current.set(bytes);
+        console.log("🎨 Loaded 1,000,000 pixel canvas buffer from server.");
       }
     } catch (err) {
-      // Canvas starts clean white
+      console.warn("Could not load server canvas binary:", err.message);
     } finally {
       setCanvasReady(true);
       setCanvasVersion((v) => v + 1);
@@ -129,12 +125,10 @@ export function GameProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    if (user) {
-      Promise.all([initUser(), loadCanvasData(), loadMilestones()]).finally(() => {
-        setIsLoading(false);
-      });
-    }
-  }, [user, initUser, loadCanvasData, loadMilestones]);
+    Promise.all([initUser(), loadCanvasData(), loadMilestones()]).finally(() => {
+      setIsLoading(false);
+    });
+  }, [initUser, loadCanvasData, loadMilestones]);
 
   // 4. WebSocket setup for real-time multiplayer updates
   useEffect(() => {
@@ -232,6 +226,7 @@ export function GameProvider({ children }) {
     };
   })();
 
+  // 5. Submit Pixels to Server with Server-Side Database Verification
   const submitPendingPixels = async () => {
     if (pendingPixels.size === 0) return;
     if (!player) return;
@@ -248,10 +243,12 @@ export function GameProvider({ children }) {
     try {
       const res = await api.placePixels(player.id, pixelArray);
       if (res?.success) {
+        // Apply confirmed pixels to in-memory buffer
         for (const p of res.appliedPixels) {
           canvasBufferRef.current[p.y * 1000 + p.x] = p.colorIndex;
         }
 
+        // Update player state with authoritative server data
         setPlayer((prev) => ({
           ...prev,
           pixelBalance: res.newBalance,
@@ -269,23 +266,9 @@ export function GameProvider({ children }) {
         loadMilestones();
       }
     } catch (err) {
-      for (const p of pixelArray) {
-        canvasBufferRef.current[p.y * 1000 + p.x] = p.colorIndex;
-      }
-
-      setPlayer((prev) => ({
-        ...prev,
-        pixelBalance: Math.max(0, prev.pixelBalance - pendingSummary.count),
-        airdropPoints: prev.airdropPoints + pendingSummary.totalPoints,
-        totalPixelsPlaced: prev.totalPixelsPlaced + pendingSummary.count,
-        freshPixelsPlaced: prev.freshPixelsPlaced + pendingSummary.freshCount,
-        recoloredPixelsPlaced: prev.recoloredPixelsPlaced + pendingSummary.recolorCount,
-      }));
-
-      setPendingPixels(new Map());
-      setCanvasVersion((v) => v + 1);
-      haptic.notification("success");
-      showToast(`🎉 Placed ${pendingSummary.count} Pixels! +${pendingSummary.totalPoints.toFixed(1)} Pts`, "success");
+      console.error("Placement error on server:", err);
+      showToast(err.message || "Failed to place pixels on server", "error");
+      haptic.notification("error");
     } finally {
       setIsSubmitting(false);
     }

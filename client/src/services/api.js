@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || "/api";
+const API_BASE = import.meta.env.VITE_API_URL || "https://pixel-warz.onrender.com/api";
 
 let authToken = localStorage.getItem("pw_auth_token") || null;
 
