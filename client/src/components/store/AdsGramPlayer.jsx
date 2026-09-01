@@ -3,17 +3,13 @@ import { useGame } from "../../context/GameContext.jsx";
 import { useTelegram } from "../../context/TelegramContext.jsx";
 import { adsgram } from "../../services/adsgram.js";
 import { api } from "../../services/api.js";
-import { Tv, Play, Clock, Sparkles } from "lucide-react";
+import { Tv, Play, Clock } from "lucide-react";
 
 export function AdsGramPlayer() {
   const { player, setPlayer, showToast } = useGame();
   const { haptic } = useTelegram();
   const [isWatching, setIsWatching] = useState(false);
   const [cooldownLeft, setCooldownLeft] = useState(0);
-
-  useEffect(() => {
-    adsgram.init();
-  }, []);
 
   useEffect(() => {
     if (!player?.lastAdWatch) return;
@@ -37,11 +33,11 @@ export function AdsGramPlayer() {
     haptic.impact("medium");
 
     try {
-      const adResult = await adsgram.showRewardedAd();
+      const adResult = await adsgram.showRewardedVideo();
 
       if (adResult.success) {
         const rewardRes = await api.claimAdReward(player.id);
-        if (rewardRes.success) {
+        if (rewardRes?.success) {
           setPlayer((prev) => ({
             ...prev,
             pixelBalance: rewardRes.newBalance,
@@ -51,7 +47,7 @@ export function AdsGramPlayer() {
           haptic.notification("success");
         }
       } else {
-        showToast(adResult.reason || "Ad was not completed.", "error");
+        showToast("Ad was not completed.", "error");
       }
     } catch (err) {
       console.error("Ad reward error:", err);
